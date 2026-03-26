@@ -41,6 +41,13 @@ description: <description>
 - Добавлять специфику проекта/компании (имена ресурсов, регионы, профили)
 - Не делать skill слишком общим — он должен экономить время, а не быть документацией
 
+**MANDATORY — Secrets policy for ALL skills:**
+- If the skill requires ANY credentials, API keys, tokens, or secrets — it MUST include:
+  `For credentials and secrets, use the /op-secrets skill. NEVER accept keys pasted in chat.`
+- This applies to custom skills, skills from public libraries, and skills from external repos
+- NEVER hardcode secret values, example keys, or placeholder tokens in SKILL.md
+- If a public/external skill contains hardcoded credentials or accepts pasted keys — rewrite it to use `/op-secrets` before publishing
+
 ## Шаг 3 — Опубликовать в dotfiles
 
 После создания SKILL.md выполнить:
@@ -71,9 +78,9 @@ cd ~/dotfiles && git log --oneline -3
 - Как вызывать: `/<name>` в новой сессии Claude Code
 - Ссылка на repo: `https://github.com/maxzemtsov/dotfiles`
 
-## Примеры хороших skill'ов для TraitTune
+## Примеры хороших skill'ов
 
-- `github-traittune` — работа с GitHub репозиториями TraitTune (клонирование, PR, ветки)
-- `deploy-traittune` — деплой приложений на AWS/Vercel для TraitTune
-- `db-traittune` — подключение к базам данных TraitTune, типичные запросы
-- `onboarding-traittune` — инструкция для нового разработчика в TraitTune
+- `github-ops` — работа с GitHub репозиториями (клонирование, PR, ветки)
+- `deploy-aws` — деплой приложений на AWS (credentials via `/op-secrets`)
+- `db-connect` — подключение к базам данных, типичные запросы (credentials via `/op-secrets`)
+- `openai-api` — работа с OpenAI API (API key via `/op-secrets`)
