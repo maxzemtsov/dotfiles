@@ -1,0 +1,217 @@
+---
+name: op-secrets
+description: Secure secrets management via 1Password CLI for Claude Code sessions and Dispatch agents. Use this skill whenever credentials, API keys, tokens, or any secrets are needed. Invoke with /op-secrets or automatically when another skill needs credentials.
+---
+
+# 1Password Secrets for Claude Code
+
+Secure delivery of secrets (API keys, credentials, tokens) to Claude Code sessions and Dispatch agents **without exposing them in chat or logs**.
+
+## 1. Installation
+
+Check if 1Password CLI beta is installed:
+
+```bash
+op --version
+# Expected: 2.33.0-beta or newer
+```
+
+If not installed:
+
+```bash
+brew install --cask 1password-cli@beta
+```
+
+## 2. Core Concepts
+
+| Concept | What it is |
+|---------|-----------|
+| **Vault** | A container for secrets (like a folder). Names are arbitrary. |
+| **Item** | A single secret entry in a Vault (login, API key, etc.). Names are arbitrary. |
+| **Secret Reference** | URI to a specific field: `op://<vault>/<item>/[section/]<field>` |
+| **Environment** | (Beta) A collection of env vars stored in 1Password, like a `.env` file but secure. |
+| **Service Account** | A non-human identity with scoped access to specific Vaults/Environments. |
+| **OP_SERVICE_ACCOUNT_TOKEN** | The single token that grants a Service Account access. This is the ONLY secret you need to provide. |
+
+## 3. Connection Workflow
+
+### Step 1: Receive the Service Account Token
+
+The user provides `OP_SERVICE_ACCOUNT_TOKEN`. This is the **only secret** that needs to be passed directly.
+
+```bash
+export OP_SERVICE_ACCOUNT_TOKEN="<token from user>"
+```
+
+### Step 2: Auto-Discovery
+
+Once the token is set, discover all accessible resources:
+
+```bash
+# List all accessible vaults
+op vault list --format=json
+
+# List items in each vault (names and IDs only, NOT values)
+op item list --vault <vault-name> --format=json
+
+# List accessible environments (beta)
+op environment list --format=json
+```
+
+The token already defines the scope of access — no need to know vault/environment names in advance.
+
+### Step 3: Read a specific secret (NEVER display the value)
+
+```bash
+# Read into an env var via subshell — value never appears in chat output
+export MY_SECRET="$(op read "op://vault-name/item-name/field-name")"
+```
+
+## 4. Secret Discovery Workflow
+
+When a task requires a secret (e.g., "set up AWS access"):
+
+### Phase 1: Automatic Search
+
+1. Run `op vault list` and `op item list` to see all available secrets
+2. Semantically match item names/fields against what's needed
+3. If a likely match is found → go to Phase 2
+
+### Phase 2: Confirmation
+
+Show the user the **NAME only** (never the value):
+
+> Found item **'aws-prod'** in vault **'DevOps'** with fields: `access-key-id`, `secret-access-key`. Use this?
+
+- **User confirms** → proceed, remember this mapping for the session
+- **User declines** → go to Phase 3
+
+### Phase 3: Manual Selection
+
+Display a full list of available items (names only, NO values):
+
+```
+Available secrets:
+  Vault: DevOps
+    - aws-prod (fields: access-key-id, secret-access-key, region)
+    - stripe-live (fields: secret-key, publishable-key)
+  Vault: AI-Services
+    - openai-key (fields: credential)
+    - anthropic-key (fields: api-key)
+```
+
+Ask the user to choose.
+
+### Phase 4: Hints When Not Found
+
+If no matching secret exists, tell the user **exactly what's needed** with examples:
+
+> I need AWS credentials but couldn't find them in your accessible Vaults. Please add an item with these fields:
+> - `access-key-id` (e.g., `AKIAIOSFODNN7EXAMPLE`)
+> - `secret-access-key` (e.g., `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY`)
+> - `region` (e.g., `us-east-1`)
+
+## 5. Secret Injection Methods
+
+### Method 1: `op read` via subshell (recommended for single secrets)
+
+```bash
+export AWS_ACCESS_KEY_ID="$(op read "op://DevOps/aws-prod/access-key-id")"
+export AWS_SECRET_ACCESS_KEY="$(op read "op://DevOps/aws-prod/secret-access-key")"
+```
+
+The `$(...)` subshell ensures the value goes directly into the env var. Claude Code sees only the command text, NOT the secret value.
+
+### Method 2: `op run` with env file (recommended for multiple secrets)
+
+Create a reference file (contains references, NOT actual secrets):
+
+```bash
+# File: /tmp/aws-secrets.env
+AWS_ACCESS_KEY_ID=op://DevOps/aws-prod/access-key-id
+AWS_SECRET_ACCESS_KEY=op://DevOps/aws-prod/secret-access-key
+AWS_DEFAULT_REGION=op://DevOps/aws-prod/region
+```
+
+Run a command with all secrets injected:
+
+```bash
+op run --env-file /tmp/aws-secrets.env -- aws sts get-caller-identity
+```
+
+### Method 3: `op run --environment` (beta — for 1Password Environments)
+
+```bash
+op run --environment "traittune-dev" -- aws sts get-caller-identity
+```
+
+### Method 4: `op environment read` (beta — inspect environment variables)
+
+```bash
+op environment read "traittune-dev" --format=json
+```
+
+## 6. Integration with Other Skills
+
+**For skill authors**: Any skill that needs secrets should include this instruction:
+
+```
+For credentials and secrets, use the `/op-secrets` skill.
+Do NOT ask the user to paste secrets in chat.
+Do NOT hardcode secrets in commands or files.
+```
+
+**For Dispatch agents**: Include in the agent's system prompt:
+
+```
+For all secrets and credentials, use the op-secrets skill.
+Never accept secrets pasted in chat — always use 1Password CLI.
+```
+
+**op-secrets is installed on the machine via dotfiles** → any agent or session on this machine can use it.
+
+## 7. Security Rules
+
+### MANDATORY — NEVER violate these rules:
+
+1. **NEVER** display a secret value in chat text or response
+2. **NEVER** run `echo`, `cat`, `printenv`, `env | grep` on secret env vars without **explicit user approval**
+3. **NEVER** write secret values to files (use `op://` references instead)
+4. **NEVER** include secret values in git commits
+5. **ALWAYS** use `$(op read ...)` subshell injection — value stays in the process env
+6. **ALWAYS** show only NAMES of secrets when listing, never values
+7. If the agent or any tool attempts to display a secret → **BLOCK and ask for user confirmation first**
+
+### What IS safe:
+
+- Showing vault names, item names, field names — these are metadata, not secrets
+- Running `op read` inside `$(...)` — the value goes to env var, not to chat
+- Running `op run -- <command>` — secrets are injected into the child process only
+
+## 8. Troubleshooting
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `not authorized` | Token lacks access to this vault | Admin: grant vault access to the Service Account |
+| `vault not found` | Vault name is wrong or not accessible | Run `op vault list` to see accessible vaults |
+| `item not found` | Item name is wrong | Run `op item list --vault <name>` to list items |
+| `could not resolve secret reference` | Wrong `op://` path format | Check: `op://<vault>/<item>/[section/]<field>` |
+| `OP_SERVICE_ACCOUNT_TOKEN not set` | Token not exported | `export OP_SERVICE_ACCOUNT_TOKEN="<token>"` |
+| `environment not found` | Environment name wrong or Environments beta not available | Check `op environment list` — requires CLI beta 2.33+ |
+| `expired token` | Service Account token expired | Admin: create a new token in 1Password |
+
+### Debug commands
+
+```bash
+# Check which account the token authenticates as
+op whoami
+
+# List all accessible vaults
+op vault list
+
+# List items in a vault (names only)
+op item list --vault <vault-name>
+
+# Check CLI version (Environments require 2.33.0-beta+)
+op --version
+```
