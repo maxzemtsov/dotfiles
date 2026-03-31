@@ -9,17 +9,19 @@ Skill for managing Render.com web services via the REST API. For credentials and
 
 ## Services
 
-| Service | URL | Environment |
-|---------|-----|-------------|
-| `traittune-main` | https://www.traittune.com | production |
-| `traittune-alpha` | https://alpha.traittune.com | dev/testing |
+| Service | Service ID | URL | Environment |
+|---------|-----------|-----|---------|
+| `traittune-main` | `srv-d1q0p7s9c44c73944akg` | https://www.traittune.com | production |
+| `traittune-alpha` | `srv-d1nvsl0gjchc738ga8o0` | https://alpha.traittune.com | dev/testing |
 
 ## Credentials — Always via /op-secrets
 
-The API key is stored in 1Password as `IRON_BALLS_RENDER_API_KEY`.
+The API key is stored in 1Password in the **TraitTune** vault, item **Render**, field **Jules (google) API key**.
+
+Use `OP_SA_TRAITTUNE` service account token:
 
 ```bash
-export RENDER_API_KEY="$(op read 'op://Claude_Code/IRON_BALLS_RENDER_API_KEY/credential')"
+export RENDER_API_KEY="$(OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_TRAITTUNE" op item get "Render" --vault "TraitTune" --reveal --fields "Jules (google) API key")"
 ```
 
 All API requests use Bearer token auth:
