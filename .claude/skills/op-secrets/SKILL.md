@@ -31,7 +31,48 @@ brew install --cask 1password-cli@beta
 | **Secret Reference** | URI to a specific field: `op://<vault>/<item>/[section/]<field>` |
 | **Environment** | (Beta) A collection of env vars stored in 1Password, like a `.env` file but secure. |
 | **Service Account** | A non-human identity with scoped access to specific Vaults/Environments. |
-| **OP_SERVICE_ACCOUNT_TOKEN** | The single token that grants a Service Account access. This is the ONLY secret you need to provide. |
+| **OP_SERVICE_ACCOUNT_TOKEN** | The active token that grants a Service Account access. Set automatically or manually before any `op` command. |
+
+## 2.5 Project-Scoped Service Accounts
+
+This organization uses **per-project service account tokens** stored in the shell environment via `~/.zshrc`:
+
+| Variable | Project | Vault Scope |
+|----------|---------|-------------|
+| `OP_SA_IRONBALL` | Iron Ball Bot | Iron Ball vaults only |
+| `OP_SA_TRAITTUNE` | TraitTune | TraitTune vaults only |
+| `OP_SERVICE_ACCOUNT_TOKEN` | Default / fallback | General access |
+
+### Token Selection Rule
+
+Before ANY `op` command, select the correct token based on your current project context:
+
+```bash
+# Iron Ball Bot work
+export OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_IRONBALL"
+
+# TraitTune work
+export OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_TRAITTUNE"
+
+# Unknown / cross-project — use default (already set in env)
+```
+
+### Per-command override (preferred for one-off reads)
+
+```bash
+# Read a TraitTune secret without changing the global token
+OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_TRAITTUNE" op read "op://TraitTune/Item/field"
+
+# Read an Iron Ball secret
+OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_IRONBALL" op read "op://IronBall/Item/field"
+```
+
+### Agent Rules
+
+- **Project-scoped agents** (engineers assigned to Iron Ball or TraitTune): ALWAYS use the matching project token
+- **Cross-project agents** (CEO, CTO, CISO): Select token based on the task's project context
+- **If unsure which project**: Use `OP_SERVICE_ACCOUNT_TOKEN` (default fallback)
+- All three tokens are inherited from `~/.zshrc` — NEVER paste tokens in chat or logs
 
 ## 3. Connection Workflow
 
