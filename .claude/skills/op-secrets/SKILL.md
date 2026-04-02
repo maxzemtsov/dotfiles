@@ -11,9 +11,9 @@ Secure delivery of secrets (API keys, credentials, tokens) to Claude Code sessio
 
 1. **NEVER run `op signin` or `eval $(op signin)`** — this gives full personal account access. Forbidden for any agent.
 2. **NEVER request the user's personal 1Password master password or account credentials**
-3. **NEVER ask user to paste `OP_SERVICE_ACCOUNT_TOKEN` in chat** — it must come from shell env
+3. **NEVER store, copy, or embed SA tokens (`ops_...`) ANYWHERE** — not in chat, logs, databases, config files, API payloads, `adapterConfig.env`, issue comments, git commits, environment files, or any other persistent storage where they could be read by others or leaked via export/backup. Tokens must ONLY exist in the shell environment inherited from `~/.zshrc`.
 4. **ONLY** use Service Account tokens (`ops_...`) with scoped vault access
-5. **Token delivery**: user sets `export OP_SERVICE_ACCOUNT_TOKEN="..."` in `~/.zshrc` → Claude inherits from shell env → never appears in chat
+5. **Token delivery**: user sets `export OP_SERVICE_ACCOUNT_TOKEN="..."` in `~/.zshrc` → the server process inherits it → all agents inherit it automatically → no need to copy or inject tokens anywhere
 
 ## 1. Installation
 
