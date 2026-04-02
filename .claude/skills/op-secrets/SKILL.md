@@ -47,10 +47,13 @@ brew install --cask 1password-cli@beta
 
 | Layer | What it stores | How to access |
 |-------|---------------|---------------|
-| **Vault** (e.g. `Claude_Code`, `TraitTune`, `IronBall`) | API keys, credentials, DB passwords as **Items** | `op read "op://VaultName/ItemName/FieldName"` |
-| **Environment** (beta) | A set of env vars (like a `.env` file) | `op run --environment <ENV_ID> -- <command>` |
+| **Vault** (e.g. `Claude_Code`, `TraitTune`, `IronBall`) | Logins, passwords, credentials, metadata, **Environment IDs** | `op read "op://VaultName/ItemName/FieldName"` |
+| **Environment** (beta) | **API keys and secret values** as env vars (like a secure `.env` file) | `op run --environment <ENV_ID> -- <command>` |
 
-**Key rule:** API keys and credentials are stored as **Vault Items**, NOT in Environments. Environments are only used for injecting multiple env vars at once (e.g. docker compose startup).
+**Key architecture:**
+- **API keys and secret values** live in **Environments** (not Vaults)
+- **Logins, passwords, metadata, and Environment IDs** live in **Vault Items**
+- To get API keys: first find the Environment ID from the Vault, then use `op run --environment` to inject them
 
 ### Discovery workflow (CORRECT order)
 
@@ -58,21 +61,34 @@ brew install --cask 1password-cli@beta
 # 1. List available vaults
 OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_TRAITTUNE" op vault list --format=json
 
-# 2. List items in a vault (names only, NOT values)
+# 2. List items in a vault — find Environment IDs, logins, credentials
 OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_TRAITTUNE" op item list --vault "TraitTune" --format=json
 
-# 3. Read a specific secret
-export NEON_API_KEY="$(OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_TRAITTUNE" op read "op://TraitTune/Neon/credential")"
+# 3. Read a specific vault item (e.g. get an Environment ID or login)
+ENV_ID="$(OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_TRAITTUNE" op read "op://TraitTune/Environment/id")"
 
-# 4. List environments (if you need env var injection)
+# 4. List environments to discover available env var sets
 OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_TRAITTUNE" op environment list --format=json
+
+# 5. Run a command with API keys injected from an environment
+OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_TRAITTUNE" op run --environment "$ENV_ID" -- your_command
+
+# 6. Or read a single env var from an environment into a shell variable
+export NEON_API_KEY="$(OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_TRAITTUNE" op run --environment "$ENV_ID" -- printenv NEON_API_KEY)"
+```
+
+### For one-off secret reads from Vault items
+
+```bash
+# Read a password or credential stored as a Vault Item
+export DB_PASSWORD="$(OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_TRAITTUNE" op read "op://TraitTune/Database/password")"
 ```
 
 ### NEVER do this
 
-- `op environment read <env-id>` — exposes values in plain text
+- `op environment read <env-id>` — exposes ALL values in plain text
 - `op item get <item> --reveal` without piping to a variable — leaks to stdout/logs
-- Guess vault or item names — always discover first
+- Guess vault, item, or environment names — ALWAYS discover first with `op vault list` → `op item list`
 
 ## 2.6 Project-Scoped Service Accounts
 
