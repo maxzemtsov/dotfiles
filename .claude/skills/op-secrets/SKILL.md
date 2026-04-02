@@ -7,6 +7,14 @@ description: Secure secrets management via 1Password CLI for Claude Code session
 
 Secure delivery of secrets (API keys, credentials, tokens) to Claude Code sessions and Dispatch agents **without exposing them in chat or logs**.
 
+## ⛔ ABSOLUTE RULES — Never Violate
+
+1. **NEVER run `op signin` or `eval $(op signin)`** — this gives full personal account access. Forbidden for any agent.
+2. **NEVER request the user's personal 1Password master password or account credentials**
+3. **NEVER ask user to paste `OP_SERVICE_ACCOUNT_TOKEN` in chat** — it must come from shell env
+4. **ONLY** use Service Account tokens (`ops_...`) with scoped vault access
+5. **Token delivery**: user sets `export OP_SERVICE_ACCOUNT_TOKEN="..."` in `~/.zshrc` → Claude inherits from shell env → never appears in chat
+
 ## 1. Installation
 
 Check if 1Password CLI beta is installed:
@@ -33,38 +41,75 @@ brew install --cask 1password-cli@beta
 | **Service Account** | A non-human identity with scoped access to specific Vaults/Environments. |
 | **OP_SERVICE_ACCOUNT_TOKEN** | The active token that grants a Service Account access. Set automatically or manually before any `op` command. |
 
-## 2.5 Project-Scoped Service Accounts
+## 2.5 Secrets Architecture
 
-This organization uses **per-project service account tokens** stored in the shell environment via `~/.zshrc`:
+### Two-layer structure
 
-| Variable | Project | Vault Scope |
+| Layer | What it stores | How to access |
+|-------|---------------|---------------|
+| **Vault** (e.g. `Claude_Code`, `TraitTune`, `IronBall`) | API keys, credentials, DB passwords as **Items** | `op read "op://VaultName/ItemName/FieldName"` |
+| **Environment** (beta) | A set of env vars (like a `.env` file) | `op run --environment <ENV_ID> -- <command>` |
+
+**Key rule:** API keys and credentials are stored as **Vault Items**, NOT in Environments. Environments are only used for injecting multiple env vars at once (e.g. docker compose startup).
+
+### Discovery workflow (CORRECT order)
+
+```bash
+# 1. List available vaults
+OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_TRAITTUNE" op vault list --format=json
+
+# 2. List items in a vault (names only, NOT values)
+OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_TRAITTUNE" op item list --vault "TraitTune" --format=json
+
+# 3. Read a specific secret
+export NEON_API_KEY="$(OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_TRAITTUNE" op read "op://TraitTune/Neon/credential")"
+
+# 4. List environments (if you need env var injection)
+OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_TRAITTUNE" op environment list --format=json
+```
+
+### NEVER do this
+
+- `op environment read <env-id>` — exposes values in plain text
+- `op item get <item> --reveal` without piping to a variable — leaks to stdout/logs
+- Guess vault or item names — always discover first
+
+## 2.6 Project-Scoped Service Accounts
+
+Per-project service account tokens are stored in the shell environment via `~/.zshrc`:
+
+| Variable | Project | Vault Access |
 |----------|---------|-------------|
-| `OP_SA_IRONBALL` | Iron Ball Bot | Iron Ball vaults only |
-| `OP_SA_TRAITTUNE` | TraitTune | TraitTune vaults only |
-| `OP_SERVICE_ACCOUNT_TOKEN` | Default / fallback | General access |
+| `OP_SA_IRONBALL` | Iron Ball Bot | IronBall vault |
+| `OP_SA_TRAITTUNE` | TraitTune | TraitTune vault |
+| `OP_SERVICE_ACCOUNT_TOKEN` | Default / fallback | Claude_Code vault |
 
 ### Token Selection Rule
 
 Before ANY `op` command, select the correct token based on your current project context:
 
 ```bash
-# Iron Ball Bot work
-export OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_IRONBALL"
+# Iron Ball Bot work — prefix each op command:
+OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_IRONBALL" op vault list --format=json
 
-# TraitTune work
-export OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_TRAITTUNE"
+# TraitTune work — prefix each op command:
+OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_TRAITTUNE" op vault list --format=json
 
-# Unknown / cross-project — use default (already set in env)
+# General / cross-project — use default (already set in env):
+op vault list --format=json
 ```
 
-### Per-command override (preferred for one-off reads)
+### Practical examples
 
 ```bash
-# Read a TraitTune secret without changing the global token
-OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_TRAITTUNE" op read "op://TraitTune/Item/field"
+# Get Neon DB connection string for TraitTune
+export DATABASE_URL="$(OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_TRAITTUNE" op read "op://TraitTune/Neon/connection_string")"
 
-# Read an Iron Ball secret
-OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_IRONBALL" op read "op://IronBall/Item/field"
+# Get Stripe API key for Iron Ball
+export STRIPE_KEY="$(OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_IRONBALL" op read "op://IronBall/Stripe/secret_key")"
+
+# Run a command with all env vars from an environment
+OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_TRAITTUNE" op run --environment "<ENV_ID>" -- python script.py
 ```
 
 ### Agent Rules
@@ -72,6 +117,7 @@ OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_IRONBALL" op read "op://IronBall/Item/field"
 - **Project-scoped agents** (engineers assigned to Iron Ball or TraitTune): ALWAYS use the matching project token
 - **Cross-project agents** (CEO, CTO, CISO): Select token based on the task's project context
 - **If unsure which project**: Use `OP_SERVICE_ACCOUNT_TOKEN` (default fallback)
+- **ALWAYS discover first**: Run `op vault list` then `op item list --vault <name>` before trying to read specific secrets
 - All three tokens are inherited from `~/.zshrc` — NEVER paste tokens in chat or logs
 
 ## 3. Connection Workflow
