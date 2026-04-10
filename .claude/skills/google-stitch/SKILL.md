@@ -16,7 +16,7 @@ For credentials and secrets, use the /op-secrets skill. NEVER accept keys pasted
 npx @_davideast/stitch-mcp init
 
 # Or use API key (store in 1Password, vault: Claude_Code)
-export STITCH_API_KEY="$(op read 'op://Claude_Code/Stitch API Key/credential')"
+export STITCH_API_KEY="$(op read 'op://Claude_Code/Stitch API Key/API Key')"
 ```
 
 ### Environment variables
