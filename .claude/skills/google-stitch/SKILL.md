@@ -3,150 +3,215 @@ name: google-stitch
 description: Generate modern UI designs with Google Stitch AI via CLI and SDK. Use when user asks to create UI mockups, design screens, generate HTML/CSS from design prompts, or build site layouts with AI.
 ---
 
-# Google Stitch — AI UI Design via CLI & SDK
+# Stitch Design Expert
 
-Generate high-fidelity UI designs from text prompts using Google Stitch (Google Labs). Export as HTML/CSS, Tailwind, React, Vue, Angular, Flutter, or SwiftUI.
+You are an expert Design Systems Lead using **Google Stitch** to create high-fidelity UI designs from text prompts. You work via CLI and SDK (no MCP) to minimize token usage.
 
 For credentials and secrets, use the /op-secrets skill. NEVER accept keys pasted in chat.
 
-## Setup
+## Auth (run once per session)
 
 ```bash
-# First-time auth (interactive — opens browser for Google OAuth)
-npx @_davideast/stitch-mcp init
-
-# Or use API key (store in 1Password, vault: Claude_Code)
+source ~/.zshrc 2>/dev/null
 export STITCH_API_KEY="$(op read 'op://Claude_Code/Stitch API Key/API Key')"
 ```
 
-### Environment variables
+## Core Workflow: Text → Design → Code
 
-| Variable | Purpose |
-|----------|---------|
-| `STITCH_API_KEY` | Direct API key auth (skip OAuth) |
-| `STITCH_ACCESS_TOKEN` | Pre-existing access token |
-| `STITCH_PROJECT_ID` | Default project ID |
-| `STITCH_USE_SYSTEM_GCLOUD` | Use system gcloud (`1` to enable) |
+### Step 1: Enhance the User's Prompt
 
-## CLI Commands
+Before calling Stitch, ALWAYS transform vague requests into structured design specs:
 
-All via `npx @_davideast/stitch-mcp <command>`:
+| Vague | Enhanced |
+|:---|:---|
+| "menu at the top" | "sticky navigation bar with logo and list items" |
+| "big photo" | "high-impact hero section with full-width imagery" |
+| "list of things" | "responsive card grid with hover states and subtle elevations" |
+| "button" | "primary call-to-action button with micro-interactions" |
+| "form" | "clean form with labeled input fields, validation states, and submit button" |
+| "sidebar" | "collapsible side navigation with icon-label pairings" |
+| "popup" | "modal dialog with overlay and smooth entry animation" |
 
-| Command | What it does |
-|---------|-------------|
-| `init` | Auth setup + config wizard |
-| `doctor` | Verify configuration health |
-| `screens -p <projectId>` | Browse project screens interactively |
-| `serve -p <projectId>` | Local Vite dev server preview |
-| `site -p <projectId>` | Generate full Astro project from screens |
-| `view` | Interactive resource browser (copy/preview/open) |
-| `snapshot` | Save screen state to file |
-| `tool <toolName>` | Invoke specific tool from CLI |
-| `logout` | Revoke credentials |
+### Atmosphere descriptors
 
-### Generate a site from Stitch designs
+| Basic Vibe | Enhanced Description |
+|:---|:---|
+| "Modern" | "Clean, minimal, with generous whitespace and high-contrast typography" |
+| "Professional" | "Sophisticated, trustworthy, utilizing subtle shadows and a restricted, premium palette" |
+| "Fun / Playful" | "Vibrant, organic, with rounded corners, bold accent colors, and bouncy micro-animations" |
+| "Dark Mode" | "Electric, high-contrast accents on deep slate or near-black backgrounds" |
+| "Luxury" | "Elegant, spacious, with fine lines, serif headers, and focus on high-fidelity photography" |
+| "Tech / Cyber" | "Futuristic, neon accents, glassmorphism effects, and monospaced typography" |
 
-```bash
-# Generate Astro site with routes mapped to screens
-npx @_davideast/stitch-mcp site -p <projectId>
+### Structured prompt format
 
-# Preview locally
-npx @_davideast/stitch-mcp serve -p <projectId>
+```
+[Overall vibe, mood, and purpose of the page]
+
+DESIGN SYSTEM:
+- Platform: [Web/Mobile], [Desktop/Mobile]-first
+- Palette: [Primary Name] (#hex for role), [Secondary Name] (#hex for role)
+- Styles: [Roundness], [Shadow/Elevation], [Typography feel]
+
+PAGE STRUCTURE:
+1. Header: [navigation and branding]
+2. Hero Section: [headline, subtext, CTA]
+3. Primary Content: [component breakdown]
+4. Footer: [links, copyright]
 ```
 
-### Get screen HTML code
+### Step 2: Generate Design via SDK
+
+Create a temp script and run it:
 
 ```bash
-npx @_davideast/stitch-mcp tool get_screen_code
-```
-
-## SDK — Programmatic Access
-
-Install: `npm install @google/stitch-sdk`
-
-### Generate UI from prompt
-
-```typescript
+cat > /tmp/stitch-generate.mjs << 'EOF'
 import { stitch } from "@google/stitch-sdk";
 
-const project = stitch.project("your-project-id");
-
-// Generate a screen
+const project = stitch.project(process.env.STITCH_PROJECT_ID || (await stitch.projects())[0]?.id);
 const screen = await project.generate(
-  "A modern dashboard with sidebar navigation, analytics cards, and a chart",
-  "DESKTOP"  // MOBILE | DESKTOP | TABLET | AGNOSTIC
+  process.argv[2], // prompt
+  process.argv[3] || "DESKTOP" // MOBILE | DESKTOP | TABLET | AGNOSTIC
 );
 
-// Get HTML
-const htmlUrl = await screen.getHtml();
+const html = await screen.getHtml();
+const image = await screen.getImage();
+console.log(JSON.stringify({ screenId: screen.id, html, image }, null, 2));
+EOF
 
-// Get screenshot
-const imageUrl = await screen.getImage();
+node /tmp/stitch-generate.mjs "Your enhanced prompt here" DESKTOP
 ```
 
-### Edit existing screen
+### Step 3: Download and Save
 
-```typescript
-const edited = await screen.edit("Change the color scheme to dark mode and add a user avatar in the header");
+```bash
+# Create designs directory
+mkdir -p .stitch/designs
+
+# Download HTML
+curl -sL "$HTML_URL" -o .stitch/designs/screen-name.html
+
+# Download screenshot
+curl -sL "$IMAGE_URL" -o .stitch/designs/screen-name.png
+```
+
+### Step 4: Edit / Refine (prefer editing over regenerating)
+
+```bash
+cat > /tmp/stitch-edit.mjs << 'EOF'
+import { stitch } from "@google/stitch-sdk";
+
+const project = stitch.project(process.env.STITCH_PROJECT_ID);
+const screen = await project.getScreen(process.argv[2]); // screenId
+const edited = await screen.edit(process.argv[3]); // edit prompt
 const html = await edited.getHtml();
+const image = await edited.getImage();
+console.log(JSON.stringify({ screenId: edited.id, html, image }, null, 2));
+EOF
+
+node /tmp/stitch-edit.mjs "SCREEN_ID" "Change the color scheme to dark mode"
 ```
 
-### Generate variants
+### Step 5: Generate Variants
 
-```typescript
-const variants = await screen.variants("Try different card layouts", { count: 3 });
+```bash
+cat > /tmp/stitch-variants.mjs << 'EOF'
+import { stitch } from "@google/stitch-sdk";
+
+const project = stitch.project(process.env.STITCH_PROJECT_ID);
+const screen = await project.getScreen(process.argv[2]);
+const variants = await screen.variants(process.argv[3], { count: 3 });
 for (const v of variants) {
-  console.log(await v.getHtml());
+  console.log(JSON.stringify({ id: v.id, html: await v.getHtml(), image: await v.getImage() }));
 }
+EOF
+
+node /tmp/stitch-variants.mjs "SCREEN_ID" "Try different card layouts"
 ```
 
-### List projects and screens
+## CLI Commands (alternative to SDK)
 
-```typescript
+```bash
+# List projects
+npx @_davideast/stitch-mcp tool list_projects
+
+# Browse screens interactively
+npx @_davideast/stitch-mcp screens -p <projectId>
+
+# Get screen HTML
+npx @_davideast/stitch-mcp tool get_screen_code
+
+# Preview locally (Vite dev server)
+npx @_davideast/stitch-mcp serve -p <projectId>
+
+# Generate full Astro site from screens
+npx @_davideast/stitch-mcp site -p <projectId>
+
+# Check health
+npx @_davideast/stitch-mcp doctor
+```
+
+## Project Management via SDK
+
+```bash
+cat > /tmp/stitch-projects.mjs << 'EOF'
+import { stitch } from "@google/stitch-sdk";
+
+// List all projects
 const projects = await stitch.projects();
-const screens = await stitch.project("id").screens();
-const screen = await stitch.project("id").getScreen("screenId");
+console.log(JSON.stringify(projects, null, 2));
+
+// Create new project
+// const p = await stitch.callTool("create_project", { title: "My App" });
+EOF
+
+node /tmp/stitch-projects.mjs
 ```
 
-### Call tools directly (agent pattern)
+## Design System File (.stitch/DESIGN.md)
 
-```typescript
-const result = await stitch.callTool("create_project", { title: "My App" });
+After generating screens, create a DESIGN.md to maintain consistency:
+
+```markdown
+# Design System
+
+## Colors
+- Primary: Ocean Blue (#2563EB) — CTAs, links, active states
+- Secondary: Slate (#475569) — body text, secondary elements
+- Background: Snow (#FAFAFA) — page canvas
+- Surface: White (#FFFFFF) — cards, elevated containers
+- Accent: Amber (#F59E0B) — highlights, badges, warnings
+
+## Typography
+- Headings: Inter, 700 weight, tight tracking
+- Body: Inter, 400 weight, relaxed line-height
+- Code: JetBrains Mono, 400 weight
+
+## Spacing
+- Page padding: 24px (mobile) / 64px (desktop)
+- Section gap: 48px / 96px
+- Card padding: 24px
+
+## Shapes
+- Buttons: rounded-lg (8px)
+- Cards: rounded-xl (12px)
+- Avatars: rounded-full
+
+## Shadows
+- Cards: 0 1px 3px rgba(0,0,0,0.1)
+- Modals: 0 20px 60px rgba(0,0,0,0.15)
 ```
-
-## Workflow: Design to Code
-
-1. **Create designs on stitch.withgoogle.com** or via SDK `project.generate()`
-2. **Browse screens**: `npx @_davideast/stitch-mcp screens -p <id>`
-3. **Get HTML/CSS**: `npx @_davideast/stitch-mcp tool get_screen_code` or SDK `screen.getHtml()`
-4. **Integrate into project**: copy HTML into your components, adapt to your framework
-5. **Generate full site**: `npx @_davideast/stitch-mcp site -p <id>` for Astro project
-
-### Tips for good prompts
-
-- Be specific: "A settings page with dark mode toggle, notification preferences, and account deletion button"
-- Reference styles: "Material Design 3 style login form with Google sign-in"
-- Specify layout: "Two-column layout with sidebar on the left, content area on the right"
-- Include state: "An e-commerce product page showing a sneaker, with size selector, add-to-cart button, and reviews section"
 
 ## Export Formats
 
-Stitch can export to:
-- HTML/CSS (default)
-- Tailwind CSS
-- React/JSX
-- Vue.js components
-- Angular templates
-- Flutter widgets
-- SwiftUI views
-- Figma (via "Copy to Figma" button in web UI)
+HTML/CSS (default), Tailwind CSS, React/JSX, Vue.js, Angular, Flutter, SwiftUI
 
 ## Device Types
 
 | Type | Use for |
 |------|---------|
-| `MOBILE` | Phone app screens (375px) |
-| `DESKTOP` | Web app pages (1280px+) |
+| `MOBILE` | Phone screens (375px) |
+| `DESKTOP` | Web pages (1280px+) |
 | `TABLET` | Tablet layouts (768px) |
 | `AGNOSTIC` | Responsive / component-level |
 
@@ -157,10 +222,19 @@ Stitch can export to:
 | Standard | Gemini 2.5 Flash | 350 |
 | Experimental | Gemini 2.5 Pro | 50 |
 
-No credit card required. Google account only.
+## Best Practices
+
+- **Enhance prompts first** — never pass vague descriptions directly to Stitch
+- **Edit, don't regenerate** — refine existing screens instead of starting over
+- **Use hex colors** — Stitch works best with specific color values
+- **Structure pages** — break into numbered sections (Header, Hero, Content, Footer)
+- **Set the vibe** — explicitly mention mood/atmosphere for better results
+- **Save DESIGN.md** — maintain consistency across multiple screens
+- **One change at a time** — targeted edits produce better results than sweeping changes
 
 ## References
 
 - Web UI: https://stitch.withgoogle.com
 - CLI: https://github.com/davideast/stitch-mcp
 - SDK: https://github.com/google-labs-code/stitch-sdk
+- Official Skills: `npx skills add google-labs-code/stitch-skills --list`

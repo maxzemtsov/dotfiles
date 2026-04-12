@@ -1,174 +1,116 @@
 ---
 name: 21st-dev
-description: Search and install shadcn/ui-based React components from 21st.dev registry. Use when user needs UI components, wants to find ready-made React/Tailwind components, or asks to build UI with 21st.dev.
+description: Search and install production-grade UI components from 21st.dev — the largest shadcn/ui React + Tailwind registry (1400+ components). Use when user needs UI components, asks to build frontend, wants ready-made React/Tailwind blocks, or mentions 21st.dev.
 ---
 
-# 21st.dev — UI Component Registry & Search
+# 21st.dev — UI Component Expert
 
-Largest marketplace of shadcn/ui-based React + Tailwind components, blocks, and hooks. Search components via API, install with one command.
+You are an expert frontend developer who builds production-grade UI using pre-built components from 21st.dev, the largest shadcn/ui component registry.
 
 For credentials and secrets, use the /op-secrets skill. NEVER accept keys pasted in chat.
 
-## Search Components (API)
+## Core Workflow: Find → Evaluate → Install → Customize
 
-Use the 21st search engine to find components by keyword:
+### Step 1: Search for Components
+
+Use the 21st search engine API:
 
 ```bash
-# Search for components
+# Search by keyword
 curl -s -X POST https://21st-search-engine.fly.dev/search \
   -H "Content-Type: application/json" \
-  -d '{"query": "accordion"}' | jq
+  -d '{"query": "date picker"}' | jq
 
-# List all indexed files/paths
+# Regex search
+curl -s -X POST https://21st-search-engine.fly.dev/search \
+  -H "Content-Type: application/json" \
+  -d '{"query": "button|card|input", "mode": "regex"}' | jq
+
+# List all available files
 curl -s -X POST https://21st-search-engine.fly.dev/list \
   -H "Content-Type: application/json" \
   -d '{}' | jq
-
-# Read a specific file from search results
-curl -s -X POST https://21st-search-engine.fly.dev/read \
-  -H "Content-Type: application/json" \
-  -d '{"path": "file/path"}' | jq
-
-# Read specific lines
-curl -s -X POST https://21st-search-engine.fly.dev/read \
-  -H "Content-Type: application/json" \
-  -d '{"path": "file/path", "startLine": 1, "endLine": 50}' | jq
 ```
 
-### Search modes
-
-| Mode | Description |
-|------|-------------|
-| `substring` (default) | Substring match |
-| `regex` | Regular expression match |
-
-Results: up to 50 items, sorted by path + line number, with 2 lines of context.
-
-## Install Components
-
-Components install via the standard shadcn CLI:
+Or use shadcn CLI search:
 
 ```bash
-npx shadcn@latest add "https://21st.dev/r/{username}/{component-slug}"
+npx shadcn@latest search https://21st.dev -q "sidebar"
+npx shadcn@latest search https://21st.dev -q "hero" -l 20
 ```
 
-### Examples
+### Step 2: Evaluate the Component
 
 ```bash
-# Install accordion from shadcn
-npx shadcn@latest add "https://21st.dev/r/shadcn/accordion"
+# Read component source from search results
+curl -s -X POST https://21st-search-engine.fly.dev/read \
+  -H "Content-Type: application/json" \
+  -d '{"path": "found/file/path"}' | jq
 
-# Install a button component
-npx shadcn@latest add "https://21st.dev/r/shadcn/button"
+# Or view via shadcn CLI
+npx shadcn@latest view "https://21st.dev/r/{author}/{component}"
 
-# Install from community authors
-npx shadcn@latest add "https://21st.dev/r/{author}/{component}"
+# Get docs and usage examples
+npx shadcn@latest docs {component-name} --json | jq
 ```
 
-The command automatically:
-- Creates component files in your project
-- Extends Tailwind theme if needed
-- Adds global styles
-- Installs required dependencies
+### Step 3: Install
 
-## Registry URL Format
+```bash
+# Install from 21st.dev registry
+npx shadcn@latest add "https://21st.dev/r/{author}/{component}" -y
+
+# Install from shadcn registry
+npx shadcn@latest add button card dialog -y
+```
+
+The command automatically creates files, extends Tailwind theme, adds global styles, and installs dependencies.
+
+### Step 4: Customize
+
+Edit the installed files directly — all components are fully editable React code in your project.
+
+## Component Catalog (1400+ components)
+
+| Category | Count | Examples |
+|----------|-------|---------|
+| Buttons | 130+ | primary, ghost, icon, animated |
+| Inputs | 102+ | text, search, password, OTP |
+| Cards | 79+ | product, profile, pricing, stats |
+| Heroes | 73+ | landing, SaaS, portfolio |
+| Selects | 62+ | dropdown, combobox, multi-select |
+| Sliders | 45+ | range, volume, color picker |
+| Accordions | 40+ | FAQ, settings, collapsible |
+| Tabs | 38+ | horizontal, vertical, animated |
+| Modals | 37+ | dialog, sheet, drawer |
+| Features | 36+ | grid, bento, comparison |
+| CTAs | 34+ | banner, floating, inline |
+| Tables | 30+ | data, sortable, paginated |
+| AI Chat | 30+ | chatbot, message bubbles |
+| Sidebars | 25+ | collapsible, floating, mobile |
+| Navbars | 25+ | sticky, transparent, mega-menu |
+| Footers | 20+ | simple, multi-column, newsletter |
+| Pricing | 18+ | tiers, comparison, toggle |
+| Testimonials | 15+ | carousel, grid, quote |
+
+Browse all: https://21st.dev
+
+## URL Format
 
 ```
 https://21st.dev/r/{username}/{component-slug}
 ```
 
-Browse components at: https://21st.dev
+## Design Best Practices
 
-## Workflow: Find & Install UI Components
+When building UI with 21st.dev components:
 
-1. **Search** for what you need:
-   ```bash
-   curl -s -X POST https://21st-search-engine.fly.dev/search \
-     -H "Content-Type: application/json" \
-     -d '{"query": "date picker"}' | jq '.[] | {path, line}'
-   ```
-
-2. **Read** the source code to evaluate:
-   ```bash
-   curl -s -X POST https://21st-search-engine.fly.dev/read \
-     -H "Content-Type: application/json" \
-     -d '{"path": "found/file/path"}' | jq
-   ```
-
-3. **Install** the component:
-   ```bash
-   npx shadcn@latest add "https://21st.dev/r/{user}/{component}"
-   ```
-
-4. **Customize** — edit the installed files in your project (components are fully editable React code)
-
-## 21st Agents SDK (optional)
-
-For building AI-powered chat agents with UI:
-
-```bash
-npm install @21st-sdk/agent @21st-sdk/nextjs @21st-sdk/react @21st-sdk/node
-```
-
-### CLI commands
-
-```bash
-# Login with API key
-API_KEY_21ST="$(op read 'op://Claude_Code/21st.dev/Claude Code API key')" \
-  npx @21st-sdk/cli login --api-key $API_KEY_21ST
-
-# Deploy an agent
-npx @21st-sdk/cli deploy
-
-# Manage env vars for deployed agent
-npx @21st-sdk/cli env list my-agent
-npx @21st-sdk/cli env set my-agent KEY value
-npx @21st-sdk/cli env remove my-agent KEY
-```
-
-### Agent project structure
-
-```
-agents/
-  my-agent/
-    agent.ts        # Agent definition (model, tools, systemPrompt)
-```
-
-```typescript
-import { agent, tool } from "@21st-sdk/agent"
-import { z } from "zod"
-
-export default agent({
-  model: "claude-sonnet-4-6",
-  systemPrompt: "You are a helpful assistant.",
-  tools: {
-    myTool: tool({
-      description: "Does something",
-      inputSchema: z.object({ input: z.string() }),
-      execute: async ({ input }) => ({
-        content: [{ type: "text", text: `Result: ${input}` }],
-      }),
-    }),
-  },
-})
-```
-
-### React integration
-
-```tsx
-import { AgentChat, createAgentChat } from "@21st-sdk/nextjs"
-import { useChat } from "@ai-sdk/react"
-
-const chat = createAgentChat({
-  agent: "my-agent",
-  tokenUrl: "/api/an-token",
-})
-
-export default function Page() {
-  const props = useChat({ chat })
-  return <AgentChat {...props} />
-}
-```
+1. **Search before building** — always check if a component exists before creating from scratch
+2. **Match the vibe** — pick components that fit the project's design language
+3. **Compose, don't monolith** — combine multiple small components instead of one huge one
+4. **Typography matters** — avoid generic fonts (Inter, Roboto, Poppins); prefer distinctive pairings
+5. **Add motion** — use Framer Motion for scroll reveals and micro-interactions
+6. **Accessibility** — ensure WCAG 2.1 AA (4.5:1 contrast, semantic HTML, ARIA labels)
 
 ## Component Stack
 
@@ -176,10 +118,29 @@ export default function Page() {
 - Tailwind CSS
 - Radix UI primitives
 - shadcn/ui patterns
+- Framer Motion (optional, for animations)
+
+## 21st Agents SDK (for AI chat UIs)
+
+For building AI-powered chat agents with ready-made UI:
+
+```bash
+# Login
+source ~/.zshrc 2>/dev/null
+API_KEY_21ST="$(op read 'op://Claude_Code/21st.dev/Claude Code API key')"
+npx @21st-sdk/cli login --api-key "$API_KEY_21ST"
+
+# Deploy an agent
+npx @21st-sdk/cli deploy
+
+# Env management
+npx @21st-sdk/cli env list my-agent
+npx @21st-sdk/cli env set my-agent KEY value
+```
 
 ## References
 
 - Registry: https://21st.dev
-- Search engine: https://21st-search-engine.fly.dev/help
-- Agents SDK docs: https://21st.dev/agents/docs
+- Search API: https://21st-search-engine.fly.dev/help
+- Agents SDK: https://21st.dev/agents/docs
 - GitHub: https://github.com/serafimcloud/21st
