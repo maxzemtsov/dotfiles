@@ -1,6 +1,6 @@
 ---
 name: 21st-dev
-description: Search and install production-grade UI components from 21st.dev — the largest shadcn/ui React + Tailwind registry (1400+ components). Use when user needs UI components, asks to build frontend, wants ready-made React/Tailwind blocks, or mentions 21st.dev.
+description: Install production-grade UI components from 21st.dev — the largest shadcn/ui React + Tailwind registry (1400+ components). Use when user needs UI components, asks to build frontend, wants ready-made React/Tailwind blocks, or mentions 21st.dev.
 ---
 
 # 21st.dev — UI Component Expert
@@ -9,108 +9,120 @@ You are an expert frontend developer who builds production-grade UI using pre-bu
 
 For credentials and secrets, use the /op-secrets skill. NEVER accept keys pasted in chat.
 
-## Core Workflow: Find → Evaluate → Install → Customize
+## Install Components
 
-### Step 1: Search for Components
-
-Use the 21st search engine API:
+Components install via the standard shadcn CLI using the 21st.dev registry URL:
 
 ```bash
-# Search by keyword
-curl -s -X POST https://21st-search-engine.fly.dev/search \
-  -H "Content-Type: application/json" \
-  -d '{"query": "date picker"}' | jq
-
-# Regex search
-curl -s -X POST https://21st-search-engine.fly.dev/search \
-  -H "Content-Type: application/json" \
-  -d '{"query": "button|card|input", "mode": "regex"}' | jq
-
-# List all available files
-curl -s -X POST https://21st-search-engine.fly.dev/list \
-  -H "Content-Type: application/json" \
-  -d '{}' | jq
-```
-
-Or use shadcn CLI search:
-
-```bash
-npx shadcn@latest search https://21st.dev -q "sidebar"
-npx shadcn@latest search https://21st.dev -q "hero" -l 20
-```
-
-### Step 2: Evaluate the Component
-
-```bash
-# Read component source from search results
-curl -s -X POST https://21st-search-engine.fly.dev/read \
-  -H "Content-Type: application/json" \
-  -d '{"path": "found/file/path"}' | jq
-
-# Or view via shadcn CLI
-npx shadcn@latest view "https://21st.dev/r/{author}/{component}"
-
-# Get docs and usage examples
-npx shadcn@latest docs {component-name} --json | jq
-```
-
-### Step 3: Install
-
-```bash
-# Install from 21st.dev registry
-npx shadcn@latest add "https://21st.dev/r/{author}/{component}" -y
-
-# Install from shadcn registry
-npx shadcn@latest add button card dialog -y
+npx shadcn@latest add "https://21st.dev/r/{username}/{component-slug}" -y
 ```
 
 The command automatically creates files, extends Tailwind theme, adds global styles, and installs dependencies.
 
-### Step 4: Customize
+## How to Find Components
 
-Edit the installed files directly — all components are fully editable React code in your project.
+**No programmatic search API exists for the 21st.dev component registry.** Use these approaches:
 
-## Component Catalog (1400+ components)
+### 1. Browse 21st.dev (primary method)
 
-| Category | Count | Examples |
-|----------|-------|---------|
-| Buttons | 130+ | primary, ghost, icon, animated |
-| Inputs | 102+ | text, search, password, OTP |
-| Cards | 79+ | product, profile, pricing, stats |
-| Heroes | 73+ | landing, SaaS, portfolio |
-| Selects | 62+ | dropdown, combobox, multi-select |
-| Sliders | 45+ | range, volume, color picker |
-| Accordions | 40+ | FAQ, settings, collapsible |
-| Tabs | 38+ | horizontal, vertical, animated |
-| Modals | 37+ | dialog, sheet, drawer |
-| Features | 36+ | grid, bento, comparison |
-| CTAs | 34+ | banner, floating, inline |
-| Tables | 30+ | data, sortable, paginated |
-| AI Chat | 30+ | chatbot, message bubbles |
-| Sidebars | 25+ | collapsible, floating, mobile |
-| Navbars | 25+ | sticky, transparent, mega-menu |
-| Footers | 20+ | simple, multi-column, newsletter |
-| Pricing | 18+ | tiers, comparison, toggle |
-| Testimonials | 15+ | carousel, grid, quote |
+Open https://21st.dev/community/components in browser and search visually. When you find a component, the install command is on the component page.
 
-Browse all: https://21st.dev
+### 2. Use WebFetch to scrape component pages
 
-## URL Format
+```bash
+# Browse components by category
+# https://21st.dev/community/components?q={query}
+```
+
+### 3. Access component code directly via CDN
 
 ```
-https://21st.dev/r/{username}/{component-slug}
+https://cdn.21st.dev/{username}/{component}/code.{timestamp}.tsx
+https://cdn.21st.dev/{username}/{component}/registry.{timestamp}.json
+https://cdn.21st.dev/{username}/{component}/{demo}/preview.{timestamp}.png
 ```
+
+### 4. SDK docs search (for 21st Agents SDK only, NOT component registry)
+
+```bash
+curl -s -X POST https://21st-search-engine.fly.dev/search \
+  -H "Content-Type: application/json" \
+  -d '{"query": "AgentChat"}' | jq
+```
+
+> WARNING: This search engine indexes SDK source code, NOT the component marketplace.
+
+## Popular Components (known working URLs)
+
+Use these directly — no search needed:
+
+### Core shadcn/ui (by shadcn)
+```bash
+npx shadcn@latest add button           # from shadcn registry
+npx shadcn@latest add card
+npx shadcn@latest add dialog
+npx shadcn@latest add input
+npx shadcn@latest add select
+npx shadcn@latest add tabs
+npx shadcn@latest add accordion
+npx shadcn@latest add table
+npx shadcn@latest add form
+npx shadcn@latest add dropdown-menu
+npx shadcn@latest add sheet
+npx shadcn@latest add tooltip
+npx shadcn@latest add badge
+npx shadcn@latest add avatar
+npx shadcn@latest add checkbox
+npx shadcn@latest add radio-group
+npx shadcn@latest add switch
+npx shadcn@latest add textarea
+npx shadcn@latest add separator
+npx shadcn@latest add skeleton
+npx shadcn@latest add alert
+npx shadcn@latest add progress
+npx shadcn@latest add scroll-area
+npx shadcn@latest add sidebar
+npx shadcn@latest add chart
+npx shadcn@latest add calendar
+npx shadcn@latest add date-picker
+npx shadcn@latest add command
+npx shadcn@latest add popover
+npx shadcn@latest add navigation-menu
+npx shadcn@latest add breadcrumb
+npx shadcn@latest add pagination
+npx shadcn@latest add carousel
+npx shadcn@latest add sonner             # toast notifications
+npx shadcn@latest add resizable
+npx shadcn@latest add toggle
+npx shadcn@latest add toggle-group
+```
+
+### Install multiple at once
+```bash
+npx shadcn@latest add button card dialog input select tabs -y
+```
+
+### Install all components
+```bash
+npx shadcn@latest add -a -y
+```
+
+## Workflow: Build UI with Components
+
+1. **Identify what you need** — break the UI into atomic components (nav, cards, forms, etc.)
+2. **Check shadcn registry first** — `npx shadcn@latest add {component}` for core components
+3. **Browse 21st.dev** for specialized/community components not in core shadcn
+4. **Install** — `npx shadcn@latest add "https://21st.dev/r/{author}/{slug}" -y`
+5. **Compose** — combine components into pages and layouts
+6. **Customize** — edit installed files directly (all fully editable React code)
 
 ## Design Best Practices
 
-When building UI with 21st.dev components:
-
 1. **Search before building** — always check if a component exists before creating from scratch
-2. **Match the vibe** — pick components that fit the project's design language
-3. **Compose, don't monolith** — combine multiple small components instead of one huge one
-4. **Typography matters** — avoid generic fonts (Inter, Roboto, Poppins); prefer distinctive pairings
-5. **Add motion** — use Framer Motion for scroll reveals and micro-interactions
-6. **Accessibility** — ensure WCAG 2.1 AA (4.5:1 contrast, semantic HTML, ARIA labels)
+2. **Compose, don't monolith** — combine multiple small components instead of one huge one
+3. **Typography matters** — avoid generic fonts (Inter, Roboto, Poppins); prefer distinctive pairings
+4. **Add motion** — use Framer Motion for scroll reveals and micro-interactions
+5. **Accessibility** — ensure WCAG 2.1 AA (4.5:1 contrast, semantic HTML, ARIA labels)
 
 ## Component Stack
 
@@ -140,7 +152,7 @@ npx @21st-sdk/cli env set my-agent KEY value
 
 ## References
 
-- Registry: https://21st.dev
-- Search API: https://21st-search-engine.fly.dev/help
+- Component Registry: https://21st.dev/community/components
+- shadcn/ui docs: https://ui.shadcn.com/docs/components
 - Agents SDK: https://21st.dev/agents/docs
 - GitHub: https://github.com/serafimcloud/21st
