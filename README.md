@@ -34,30 +34,12 @@ Every skill that needs credentials **must** use `/op-secrets`. Never paste keys 
 
 ---
 
-## Personal overrides
-
-Some skills (like `op-secrets` and `render-deploy`) ship as generic templates. To add your own project-specific config, create a `personal/` directory — it's gitignored and stays local only:
-
-```
-dotfiles/
-  .claude/skills/
-    op-secrets/SKILL.md        ← public template (placeholders)
-    render-deploy/SKILL.md     ← public template (placeholders)
-  personal/                    ← gitignored, your machine only
-    op-secrets/SKILL.md        ← your real vault names, token variables
-    render-deploy/SKILL.md     ← your real service IDs and URLs
-```
-
-`install.sh` installs public skills first, then overlays `personal/` on top — so `/op-secrets` and `/render-deploy` use your private versions locally while the repo stays safe to share.
-
----
-
 ## Architecture
 
 ```
 ~/.claude/skills/              ← symlinks created by install.sh
-    op-secrets/   →  ~/dotfiles/personal/op-secrets/   (or public fallback)
-    render-deploy/ → ~/dotfiles/personal/render-deploy/ (or public fallback)
+    op-secrets/   →  ~/dotfiles/.claude/skills/op-secrets/
+    render-deploy/ → ~/dotfiles/.claude/skills/render-deploy/
     ux-psychology/ → ~/dotfiles/.claude/skills/ux-psychology/
     shadcn-ui/    →  ~/dotfiles/.claude/skills/shadcn-ui/
     21st-dev/     →  ~/dotfiles/.claude/skills/21st-dev/
