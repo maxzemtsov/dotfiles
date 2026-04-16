@@ -17,11 +17,3 @@ dotfiles/
 
 `install.sh` installs public skills first, then overlays `personal/` — so
 `/op-secrets` and `/render-deploy` use private versions locally.
-
-## Git authorship
-
-Always commit as Max Zemtsov:
-```bash
-git config user.name "Max Zemtsov"
-git config user.email "14141103+maxzemtsov@users.noreply.github.com"
-```
