@@ -47,7 +47,7 @@ brew install --cask 1password-cli@beta
 
 | Layer | What it stores | How to access |
 |-------|---------------|---------------|
-| **Vault** (e.g. `Claude_Code`, `TraitTune`, `IronBall`) | Logins, passwords, credentials, metadata, **Environment IDs** | `op read "op://VaultName/ItemName/FieldName"` |
+| **Vault** (e.g. `Project1`, `Project2`) | Logins, passwords, credentials, metadata, **Environment IDs** | `op read "op://VaultName/ItemName/FieldName"` |
 | **Environment** (beta) | **API keys and secret values** as env vars (like a secure `.env` file) | `op run --environment <ENV_ID> -- <command>` |
 
 **Key architecture:**
@@ -59,29 +59,29 @@ brew install --cask 1password-cli@beta
 
 ```bash
 # 1. List available vaults
-OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_TRAITTUNE" op vault list --format=json
+op vault list --format=json
 
 # 2. List items in a vault — find Environment IDs, logins, credentials
-OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_TRAITTUNE" op item list --vault "TraitTune" --format=json
+op item list --vault "Project1" --format=json
 
 # 3. Read a specific vault item (e.g. get an Environment ID or login)
-ENV_ID="$(OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_TRAITTUNE" op read "op://TraitTune/Environment/id")"
+ENV_ID="$(op read "op://Project1/Environment/id")"
 
 # 4. List environments to discover available env var sets
-OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_TRAITTUNE" op environment list --format=json
+op environment list --format=json
 
 # 5. Run a command with API keys injected from an environment
-OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_TRAITTUNE" op run --environment "$ENV_ID" -- your_command
+op run --environment "$ENV_ID" -- your_command
 
 # 6. Or read a single env var from an environment into a shell variable
-export NEON_API_KEY="$(OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_TRAITTUNE" op run --environment "$ENV_ID" -- printenv NEON_API_KEY)"
+export API_KEY="$(op run --environment "$ENV_ID" -- printenv API_KEY)"
 ```
 
 ### For one-off secret reads from Vault items
 
 ```bash
 # Read a password or credential stored as a Vault Item
-export DB_PASSWORD="$(OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_TRAITTUNE" op read "op://TraitTune/Database/password")"
+export DB_PASSWORD="$(op read "op://Project1/Database/password")"
 ```
 
 ### NEVER do this
@@ -92,24 +92,27 @@ export DB_PASSWORD="$(OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_TRAITTUNE" op read "op://
 
 ## 2.6 Project-Scoped Service Accounts
 
-Per-project service account tokens are stored in the shell environment via `~/.zshrc`:
+Per-project service account tokens are stored in the shell environment via `~/.zshrc`.
 
-| Variable | Project | Vault Access |
-|----------|---------|-------------|
-| `OP_SA_IRONBALL` | Iron Ball Bot | IronBall vault |
-| `OP_SA_TRAITTUNE` | TraitTune | TraitTune vault |
-| `OP_SERVICE_ACCOUNT_TOKEN` | Default / fallback | Claude_Code vault |
+**Setup example** — adapt to your own projects:
+
+```bash
+# ~/.zshrc — add one variable per project
+export OP_SA_PROJECT1="ops_..."   # Service Account token for Project1
+export OP_SA_PROJECT2="ops_..."   # Service Account token for Project2
+export OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_PROJECT1"  # default fallback
+```
 
 ### Token Selection Rule
 
 Before ANY `op` command, select the correct token based on your current project context:
 
 ```bash
-# Iron Ball Bot work — prefix each op command:
-OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_IRONBALL" op vault list --format=json
+# Project1 work — prefix each op command:
+OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_PROJECT1" op vault list --format=json
 
-# TraitTune work — prefix each op command:
-OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_TRAITTUNE" op vault list --format=json
+# Project2 work — prefix each op command:
+OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_PROJECT2" op vault list --format=json
 
 # General / cross-project — use default (already set in env):
 op vault list --format=json
@@ -118,23 +121,23 @@ op vault list --format=json
 ### Practical examples
 
 ```bash
-# Get Neon DB connection string for TraitTune
-export DATABASE_URL="$(OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_TRAITTUNE" op read "op://TraitTune/Neon/connection_string")"
+# Get DB connection string for Project1
+export DATABASE_URL="$(OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_PROJECT1" op read "op://Project1/Database/connection_string")"
 
-# Get Stripe API key for Iron Ball
-export STRIPE_KEY="$(OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_IRONBALL" op read "op://IronBall/Stripe/secret_key")"
+# Get Stripe API key for Project2
+export STRIPE_KEY="$(OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_PROJECT2" op read "op://Project2/Stripe/secret_key")"
 
 # Run a command with all env vars from an environment
-OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_TRAITTUNE" op run --environment "<ENV_ID>" -- python script.py
+OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_PROJECT1" op run --environment "$ENV_ID" -- python script.py
 ```
 
 ### Agent Rules
 
-- **Project-scoped agents** (engineers assigned to Iron Ball or TraitTune): ALWAYS use the matching project token
-- **Cross-project agents** (CEO, CTO, CISO): Select token based on the task's project context
+- **Project-scoped agents**: ALWAYS use the matching project token
+- **Cross-project agents**: Select token based on the task's project context
 - **If unsure which project**: Use `OP_SERVICE_ACCOUNT_TOKEN` (default fallback)
 - **ALWAYS discover first**: Run `op vault list` then `op item list --vault <name>` before trying to read specific secrets
-- All three tokens are inherited from `~/.zshrc` — NEVER paste tokens in chat or logs
+- All tokens are inherited from `~/.zshrc` — NEVER paste tokens in chat or logs
 
 ## 3. Connection Workflow
 
@@ -245,13 +248,7 @@ op run --env-file /tmp/aws-secrets.env -- aws sts get-caller-identity
 ### Method 3: `op run --environment` (beta — for 1Password Environments)
 
 ```bash
-op run --environment "traittune-dev" -- aws sts get-caller-identity
-```
-
-### Method 4: `op environment read` (beta — inspect environment variables)
-
-```bash
-op environment read "traittune-dev" --format=json
+op run --environment "<env-id>" -- aws sts get-caller-identity
 ```
 
 ## 6. Integration with Other Skills
@@ -306,15 +303,8 @@ Never accept secrets pasted in chat — always use 1Password CLI.
 ### Debug commands
 
 ```bash
-# Check which account the token authenticates as
 op whoami
-
-# List all accessible vaults
 op vault list
-
-# List items in a vault (names only)
 op item list --vault <vault-name>
-
-# Check CLI version (Environments require 2.33.0-beta+)
 op --version
 ```
