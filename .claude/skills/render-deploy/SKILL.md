@@ -7,21 +7,27 @@ description: Manage Render.com services — deploy, restart, get status, view lo
 
 Skill for managing Render.com web services via the REST API. For credentials and secrets, use the `/op-secrets` skill. NEVER accept keys pasted in chat.
 
-## Services
+## Setup
 
+### 1. Add your services
+
+Edit `personal/render-deploy/SKILL.md` (gitignored) with your actual service IDs and URLs:
+
+```
 | Service | Service ID | URL | Environment |
-|---------|-----------|-----|---------|
-| `traittune-main` | `srv-d1q0p7s9c44c73944akg` | https://www.traittune.com | production |
-| `traittune-alpha` | `srv-d1nvsl0gjchc738ga8o0` | https://alpha.traittune.com | dev/testing |
+|---------|-----------|-----|-------------|
+| my-app-prod  | srv-xxxxxxxxxxxxxxxxx | https://www.my-app.com   | production |
+| my-app-alpha | srv-xxxxxxxxxxxxxxxxx | https://alpha.my-app.com | dev/testing |
+```
 
-## Credentials — Always via /op-secrets
+Find your Service ID in the Render dashboard → your service → Settings → Service ID.
 
-The API key is stored in 1Password in the **TraitTune** vault, item **Render**, field **Jules (google) API key**.
+### 2. Store credentials in 1Password
 
-Use `OP_SA_TRAITTUNE` service account token:
+Store the Render API key in your 1Password vault, then retrieve it via `/op-secrets`:
 
 ```bash
-export RENDER_API_KEY="$(OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_TRAITTUNE" op item get "Render" --vault "TraitTune" --reveal --fields "Jules (google) API key")"
+export RENDER_API_KEY="$(op read "op://YourVault/Render/api-key")"
 ```
 
 All API requests use Bearer token auth:
@@ -166,15 +172,15 @@ curl -s --request PUT \
 
 ## Workflow: Safe Production Deploy
 
-1. **Deploy to alpha first**: trigger deploy on `traittune-alpha`
-2. **Verify**: check deploy status reaches `live`, test at https://alpha.traittune.com
-3. **Deploy to production**: trigger deploy on `traittune-main`
-4. **Monitor**: check deploy status, verify https://www.traittune.com
+1. **Deploy to staging first**: trigger deploy on your staging service
+2. **Verify**: check deploy status reaches `live`, test the staging URL
+3. **Deploy to production**: trigger deploy on your production service
+4. **Monitor**: check deploy status, verify production URL
 5. **Rollback if needed**: use rollback endpoint with the previous `live` deploy ID
 
 ## Safety Rules
 
-- **Always deploy to alpha before production**
+- **Always deploy to staging before production**
 - **Never deploy untested commits to production**
 - **Check deploy status before declaring success** — wait for `live` status
 - **Keep the previous deploy ID** before deploying, in case rollback is needed
