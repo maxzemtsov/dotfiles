@@ -1,6 +1,6 @@
 # dotfiles — maxzemtsov
 
-Personal dotfiles, Claude Code skills, and developer tooling.
+Personal Claude Code skills and developer tooling.
 
 ## Quick install
 
@@ -11,9 +11,82 @@ bash ~/dotfiles/install.sh
 
 `install.sh` symlinks all skills into `~/.claude/skills/` so Claude Code picks them up automatically.
 
+---
+
+## Claude Code Skills
+
+Skills load automatically. Invoke with `/<skill-name>` in any Claude Code session.
+
+| Skill | Invoke | Description |
+|-------|--------|-------------|
+| `op-secrets` | `/op-secrets` | Secure secrets via 1Password CLI — fetch credentials without exposing them in chat. Use before any skill that needs API keys or tokens. |
+| `aws-cli` | `/aws-cli` | AWS CLI setup and common commands. Credentials always via `/op-secrets`. |
+| `render-deploy` | `/render-deploy` | Manage Render.com services — deploy, restart, logs, rollback. Configure your services in `personal/render-deploy/SKILL.md`. |
+| `ux-psychology` | `/ux-psychology` | Apply 106 cognitive biases and UX psychology principles to product and UI design decisions. |
+| `shadcn-ui` | `/shadcn-ui` | shadcn/ui CLI — init projects, add components, search registries, view docs. |
+| `21st-dev` | `/21st-dev` | Install production-grade UI components from 21st.dev (1400+ React + Tailwind blocks). |
+| `google-stitch` | `/google-stitch` | Generate UI designs with Google Stitch AI — mockups, HTML/CSS from prompts. |
+| `add-skill` | `/add-skill` | Create a new Claude Code skill and publish it to this repo. |
+
+### Secrets policy
+
+Every skill that needs credentials **must** use `/op-secrets`. Never paste keys in chat.
+
+---
+
+## Personal overrides
+
+Some skills (like `op-secrets` and `render-deploy`) ship as generic templates. To add your own project-specific config, create a `personal/` directory — it's gitignored and stays local only:
+
+```
+dotfiles/
+  .claude/skills/
+    op-secrets/SKILL.md        ← public template (placeholders)
+    render-deploy/SKILL.md     ← public template (placeholders)
+  personal/                    ← gitignored, your machine only
+    op-secrets/SKILL.md        ← your real vault names, token variables
+    render-deploy/SKILL.md     ← your real service IDs and URLs
+```
+
+`install.sh` installs public skills first, then overlays `personal/` on top — so `/op-secrets` and `/render-deploy` use your private versions locally while the repo stays safe to share.
+
+---
+
+## Architecture
+
+```
+~/.claude/skills/              ← symlinks created by install.sh
+    op-secrets/   →  ~/dotfiles/personal/op-secrets/   (or public fallback)
+    render-deploy/ → ~/dotfiles/personal/render-deploy/ (or public fallback)
+    ux-psychology/ → ~/dotfiles/.claude/skills/ux-psychology/
+    shadcn-ui/    →  ~/dotfiles/.claude/skills/shadcn-ui/
+    21st-dev/     →  ~/dotfiles/.claude/skills/21st-dev/
+    google-stitch/ → ~/dotfiles/.claude/skills/google-stitch/
+    aws-cli/      →  ~/dotfiles/.claude/skills/aws-cli/
+    add-skill/    →  ~/dotfiles/.claude/skills/add-skill/
+```
+
+### How `/op-secrets` works
+
+```
+1Password setup:
+  Vault → Items (credentials) or Environments (.env-style secret sets)
+  Service Account → scoped vault access → OP_SERVICE_ACCOUNT_TOKEN
+
+Claude Code session:
+  1. Inherits OP_SERVICE_ACCOUNT_TOKEN from ~/.zshrc
+  2. Auto-discovers: op vault list → op item list → op environment list
+  3. Semantically matches needed credential → shows NAME only (never value)
+  4. User confirms → injects via subshell:
+       export API_KEY="$(op read op://vault/item/field)"
+     Value goes to env var — never appears in chat or logs
+```
+
+---
+
 ## Remote access from phone
 
-Keep Mac always on, control Claude Code remotely:
+Control Claude Code on your Mac remotely via SSH:
 
 ```bash
 # 1. Install Tailscale on Mac
@@ -24,50 +97,32 @@ sudo tailscaled
 # 3. SSH into Mac via Tailscale IP → run `claude`
 ```
 
-All skills, plugins, and MCPs work over SSH — they run locally on the Mac.
+All skills and MCPs work over SSH — they run locally on the Mac.
 
 ---
 
-## Claude Code Skills
+## Installing on a new machine
 
-Skills are loaded automatically by Claude Code. Invoke with `/<skill-name>` in any session.
-
-| Skill | Invoke | Description |
-|-------|--------|-------------|
-| `op-secrets` | `/op-secrets` | Secure secrets via 1Password CLI — fetch credentials without exposing them in chat. Always use this before any other skill that needs API keys or tokens. |
-| `aws-cli` | `/aws-cli` | AWS CLI setup and common commands. Credentials always via `/op-secrets`. |
-| `add-skill` | `/add-skill` | Create a new Claude Code skill and publish it to this dotfiles repo. |
-
-### Secrets policy
-
-Every skill that needs credentials **must** use `/op-secrets`. Never paste keys in chat.
-
----
-
-## Architecture
-
-```
-~/.claude/skills/          ← symlinks (created by install.sh)
-    op-secrets/  →  ~/dotfiles/.claude/skills/op-secrets/SKILL.md
-    aws-cli/     →  ~/dotfiles/.claude/skills/aws-cli/SKILL.md
-    add-skill/   →  ~/dotfiles/.claude/skills/add-skill/SKILL.md
+```bash
+git clone git@github.com:maxzemtsov/dotfiles.git ~/dotfiles
+bash ~/dotfiles/install.sh
 ```
 
-### How `/op-secrets` works
+Optional dependencies by skill:
 
-```
-User sets up in 1Password (web app):
-  Vault → Items (credentials) or Environments (.env-style secret sets)
-  Service Account → scoped access → OP_SERVICE_ACCOUNT_TOKEN
+```bash
+# /op-secrets — 1Password CLI beta
+brew install --cask 1password-cli@beta
+op --version  # should be 2.33.0-beta or newer
 
-Claude Code session:
-  1. Receives OP_SERVICE_ACCOUNT_TOKEN (the only secret passed directly)
-  2. Auto-discovers: op vault list → op item list → op environment list
-  3. Semantically matches needed credentials → shows NAME only (never values)
-  4. User confirms → injects via subshell:
-       export AWS_ACCESS_KEY_ID="$(op read op://vault/item/field)"
-     Value goes directly to env var — never appears in chat or logs
+# /aws-cli
+brew install awscli
+
+# /shadcn-ui and /21st-dev — Node.js required
+node --version
 ```
+
+After install, create `~/dotfiles/personal/` with your private skill overrides (see Personal overrides above).
 
 ---
 
@@ -78,27 +133,11 @@ Use `/add-skill` in Claude Code — it guides through creation and publishing.
 Or manually:
 
 ```bash
-# Create skill
-mkdir -p ~/.claude/skills/my-skill
-# write ~/.claude/skills/my-skill/SKILL.md
+mkdir -p ~/dotfiles/.claude/skills/my-skill
+# write ~/dotfiles/.claude/skills/my-skill/SKILL.md
 
-# Publish to dotfiles
-cp -r ~/.claude/skills/my-skill ~/dotfiles/.claude/skills/
 cd ~/dotfiles
-git add . && git commit -m "add skill: my-skill"
+git add .claude/skills/my-skill
+git commit -m "add skill: my-skill"
 git push
-```
-
-## Installing on a new machine
-
-```bash
-git clone git@github.com:maxzemtsov/dotfiles.git ~/dotfiles
-bash ~/dotfiles/install.sh
-
-# Install 1Password CLI beta (required for /op-secrets)
-brew install --cask 1password-cli@beta
-op --version  # should be 2.33.0-beta or newer
-
-# Install AWS CLI (for /aws-cli)
-brew install awscli
 ```
