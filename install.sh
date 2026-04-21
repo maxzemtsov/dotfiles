@@ -23,4 +23,9 @@ if [ -d "$DOTFILES_DIR/personal" ]; then
   done
 fi
 
+# Claude Code agents — symlink agents directory into ~/.claude
+mkdir -p "$DOTFILES_DIR/.claude/agents"
+ln -sf "$DOTFILES_DIR/.claude/agents" ~/.claude/agents
+echo "  ✓ agents → dotfiles/.claude/agents"
+
 echo "Done."
