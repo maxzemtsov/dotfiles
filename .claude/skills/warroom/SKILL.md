@@ -1,146 +1,183 @@
 ---
 name: warroom
-description: Assemble a comprehensive project status report — what's done, what's stuck, what's left, dependencies, constraints, recommended next-step priority. Invoke when starting a session on a multi-week project, before a major decision/cutover, or when handing off to another contributor. Pulls from cutover/release-readiness docs, git log, CI history, open todos, parallel-session notes.
+description: Assemble a comprehensive situation-room status report for ANY project or initiative — what's done, what's stuck, what's left, dependencies between items, constraints, and the recommended next 3 actions. Pulls signal from whatever sources exist: docs, git, CI, issue trackers, analytics, runbooks, conversation history. Invoke when starting a session on a complex initiative, before a major decision, when handing off, or when you need a clean "where we stand" picture before recommending action. Works for software projects, marketing campaigns, research efforts, ops migrations, M&A workstreams, anything with > 20 moving parts.
 ---
 
-# /warroom — Comprehensive project status assembly
+# /warroom — Situation-room information assembly
 
-When invoked, produce a single structured report covering "where we stand" on a multi-week project. The output is tuned for projects that have a release-readiness or cutover doc (e.g. `docs/PROD_CUTOVER_READINESS_*.md`), parallel sessions/contributors, and ops gates that mix code + manual actions.
+The "war room" name refers to the leadership pattern: a focused room where decision-makers see the full landscape — done, in-flight, blocked, dependencies, constraints — and pick the next 3 moves. This skill produces that view from whatever artifacts the project has.
 
-## When to use
+It's deliberately generic. Same 6-section structure works for software cutovers, ad campaigns, research projects, ops migrations, board meetings, anything.
 
-- Starting a new session on a project with a backlog ≥ 20 items
-- Before a major decision (cutover, prod-promotion, sprint-end review)
-- Handing off to another contributor (paired with `/remember`)
-- Mid-sprint sanity check: "are we tracking the right things?"
-- After a marathon of commits — confirm progress + spot regressions
+## When to invoke
 
-NOT for: trivial tasks, single-feature work, anything that fits in one paragraph.
+- Starting a session on a complex initiative ≥ 20 moving parts
+- Before any major decision (launch, cutover, sprint commit, budget allocation, contract sign-off)
+- Handing off to another contributor / agent / team
+- After a marathon of work — confirm progress + spot regressions
+- When stuck and need to step back: "what should I actually do next?"
 
-## What to assemble
+NOT for: trivial single-task work, anything that fits in 3 paragraphs of context.
 
-A `/warroom` report has 6 fixed sections. Adapt content to project but keep section order.
+## The 6 fixed sections
 
-### 1. State (one paragraph)
+Same order, every time. Skip a section only if genuinely empty.
 
-Branch HEAD sha + 1-line summary of recent work + top non-obvious gotcha. Mirrors `remember.md` State section but adds the operational context (CI green? deploys live? known regressions?).
+### 1. State — one paragraph
 
-### 2. Что сделано — Done table
+Where things stand RIGHT NOW. Branch sha + recent shipped work for software; campaign metrics + ad spend for marketing; current page count + outstanding citations for research. End with the top non-obvious gotcha (the thing that surprised someone in the last week).
 
-| Gate / item | Status | Verification |
+### 2. Done
+
+What's complete + verifiable. Table format:
+
+| Item | Status | Verification |
 |---|---|---|
 
-Closed items only. "Verification" column is the proof: live URL probe, DB query, CI workflow status, doc cross-link. If unverifiable, mark `claimed-not-verified`.
+"Verification" is the proof: live URL, deploy log, signed contract, paid invoice, peer-reviewed citation. If unverifiable, mark `claimed-not-verified` and treat as in-flight, not done.
 
-### 3. Что застряло — Blocked
+### 3. Blocked
+
+What's stuck behind a known blocker. Table:
 
 | Item | Blocker | Owner | Estimated unblock |
 |---|---|---|---|
 
-Items where the path forward exists but waits on someone/something. Be specific about the blocker:
-- "CTO must complete Stripe business identity verification on dashboard.stripe.com"
-- "User must click verify link in inbox X"
-- "Awaiting parallel session N to finish on file Y"
+Be specific about blocker: a person, an external party, a credential, a regulatory wait, a technical dependency. "Person Y must do X" or "regulatory approval expected by date Z".
 
-### 4. Что осталось — Open work
+### 4. Open work
 
 Priority-ordered. For each:
-- Item ID + 1-line description
-- Estimate (S/M/L or hours/days)
-- Files/surfaces touched (so reader can spot conflicts)
-- Dependencies (must finish X first)
-- Suitable agent (foreground / sub-agent / sub-agent pair / human-only)
+- Item ID/name + 1-line description
+- Estimate (S/M/L or hours/days/weeks — match the project's time-scale)
+- Surfaces touched (files, ad accounts, customers, regions — whatever moves)
+- Dependencies (must finish X first; or runs parallel to Y)
+- Suitable executor (self / agent / sub-agent pair / contractor / team-member-X)
 
-### 5. Connections + dependencies map
+### 5. Connections + conflicts
 
-A small ASCII map or list showing which items must wait on which. Format:
+ASCII map or short list showing dependencies + conflicts:
 
 ```
-A → B (B unblocks once A merges)
-A ‖ C (parallel, no conflict)
-A ⨯ D (CONFLICT — same files, sequence required)
+A → B    (B unblocks once A completes)
+A ‖ C    (parallel, no conflict)
+A ⨯ D    (CONFLICT — same resource, sequence required)
 ```
 
-Highlight CONFLICT-PARK items explicitly — these are open but should NOT be touched until something else clears.
+Highlight CONFLICT items explicitly. These are open-but-don't-touch-yet (waiting on something to clear).
 
-### 6. Constraints + don't-touch zones
+### 6. Constraints + boundaries
 
-- Parallel session boundaries (which files/tables another session owns)
-- Carte-blanche scope (what's permitted vs not)
-- Paid-op gates (what costs money + threshold to ask)
-- Production-tier guardrails (no DNS swap without consent, etc.)
-- Branch policies (alpha-only, no main pushes, etc.)
+Things that bound the decision space:
+- Permissions / scope ("permitted to act except for X")
+- Cost / budget gates ("ask before spending > $Y")
+- Confidentiality / NDA boundaries
+- Parallel-actor zones ("Team B owns this, don't touch")
+- Time / regulatory windows ("must close before date Z")
+- Reversibility ("this action is one-way; double-check before triggering")
+
+Constraints often surface what NOT to do — equally important as what to do.
 
 ### 7. Recommended next 3 actions
 
-NOT a long list. EXACTLY 3 actions, ranked. For each: why this one before others, expected outcome, ETA. Choose by leverage × unblock × low-conflict.
+EXACTLY 3 (unless the user asked for more). Ranked by leverage × unblock-impact × low-conflict.
 
-## How to gather material
+For each: 
+- Why this before others
+- Expected outcome
+- ETA / effort
+- Who executes
 
-Inputs to read in priority order:
+3 actions because human attention is bounded. A list of 12 things "to maybe do" doesn't drive decisions.
 
-1. **`.remember/remember.md`** at project root — the most-recent handoff
-2. **`docs/PROD_CUTOVER_READINESS_*.md`** or equivalent release-readiness doc — gate inventory
-3. **`git log --oneline -20`** — what's shipped recently
-4. **`gh run list --limit 10`** — CI state
-5. **TodoWrite list** — in-flight session tasks
-6. **`docs/PIPELINE_STATUS_*.md`** or similar — workstream snapshot
-7. Any `*_AUDIT_*.md` / `*_REVIEW_*.md` / `*_MONITORS_*.md` doc landed recently — outstanding findings
+## How to gather signal — adapt to project type
 
-For ops state (cutover-flavoured projects):
+The skill is signal-agnostic. Use what exists. Common patterns:
 
-8. Live probe: `curl -sI <staging-url>` for headers + `gh run list --branch <branch>` for CI
-9. AWS / Cloud state: budget alarms, deployments, env vars on each env
-10. Sentry / observability: alert rule count, monitor health, recent issue volume
-11. Database: spot-check schema sanity (key tables exist, recent migrations applied)
+### Software / engineering project
+- `.remember/remember.md` if exists
+- Release-readiness or cutover docs (`docs/CUTOVER*.md`, `docs/RELEASE*.md`)
+- `git log --oneline -30`
+- `gh run list --limit 15` (CI)
+- `gh issue list` / `gh pr list` 
+- TodoWrite list (current session)
+- Recent audit / review docs (`*_AUDIT_*.md`, `*_REVIEW_*.md`)
+- Live probes if web app: response codes, deployed bundle inspection, DB sanity
 
-Don't probe production unless the report asks for prod-state. Default to staging.
+### Marketing / growth project
+- Campaign briefs + creative calendar
+- Ad account spend reports (Google Ads, Meta, LinkedIn)
+- Analytics platform data (PostHog, GA4, Mixpanel)
+- A/B test results
+- Content publication schedule
+- Influencer / partnership pipeline
+
+### Operations / migration project
+- Runbooks + standard operating procedures
+- Ticket backlog (Linear, Jira, GitHub Issues)
+- On-call rotation + handoff notes
+- Incident postmortems (recent)
+- Vendor contracts + SLA terms
+
+### Research / academic project
+- Lit-review notes, outstanding citations
+- Outline / chapter status
+- Outstanding interviews / experiments
+- Reviewer feedback unaddressed
+- Submission deadlines
+
+### Cross-functional initiative (M&A, product launch, regulatory)
+- Decision log (D-1, D-2... per the standard format)
+- Stakeholder map + their unresolved positions
+- Cross-team dependencies
+- External party commitments + risks
+- Critical-path Gantt or equivalent
+
+### Anything else
+- READMEs, project wikis, pinned messages
+- Recent meeting notes
+- Conversation transcripts (if accessible)
+- Any "status" or "weekly update" doc
+
+When sources are sparse, surface that explicitly: "Section 4 sparse — only signals available are git log + Slack pins. Recommend producing a backlog file before next /warroom run."
 
 ## Format rules
 
 - Tables for inventory (sections 2, 3, 4) — scannable
 - Prose for state + constraints — context-rich
-- Specific paths + commit shas + line numbers — never vague
+- Specifics over abstractions: file paths, sha, dates, dollar amounts, named people
 - Length cap: ≤ 300 lines for the rendered report. Trim ruthlessly.
-- Russian + English mix is fine when project uses both — match user register
+- Match the user's working language (English / Russian / mixed — whatever the project uses)
 
 ## Anti-patterns
 
-- Don't pad section 4 with items already in section 2 (closed) — those go in Done only
-- Don't recommend more than 3 next-actions — overwhelming
-- Don't claim items are "done" without proof in section 2's Verification column
-- Don't skip the Constraints section — that's where session-pair conflicts and budget gates live; missing it leads to redundant work
-- Don't include LLM-cost-burn estimates as "free" — surface real costs (Bedrock spend, Stripe fees, paid plan upgrades)
+- Padding section 4 with items already in section 2 — closed items go in Done only
+- Recommending more than 3 next-actions — overwhelming, not decision-driving
+- Claiming "done" without proof in the Verification column
+- Skipping the Constraints section — that's where conflict-zones and budget gates live
+- "Free" / "$0" claims when there are real costs (LLM tokens, ad spend, contractor hours, opportunity cost)
+- Assuming a project is software just because the project root looks like a repo — research projects, marketing initiatives, and operational workstreams can live in a git repo too. Always check what KIND of project this is before picking signal sources.
 
-## Examples — see prior usage in TraitTune project
-
-Sessions on 2026-05-09 + 2026-05-10 produced multi-section warroom checkpoints in chat. The pattern shipped 19 gates across 16 commits in one day by maintaining strict gate-tracking. Re-read those messages for tone-of-voice (concise, table-heavy, action-oriented).
-
-## Related skills
-
-- `/remember:remember` — short-form handoff (≤ 20 lines), pairs with /warroom (long-form context)
-- `/op-secrets` — for any secret reads needed during status check (NEVER accept keys pasted in chat)
-
-## Output template
+## Output template (universal)
 
 ```md
 # War Room — <project> — <date>
 
 ## State
-<1 paragraph>
+<1 paragraph — where we stand + non-obvious gotcha>
 
-## Что сделано
-| Gate | Status | Verification |
+## Done
+| Item | Status | Verification |
 |---|---|---|
 ...
 
-## Что застряло
+## Blocked
 | Item | Blocker | Owner | Unblock ETA |
 |---|---|---|---|
 ...
 
-## Что осталось
-1. **<ID>** <one-line> — <S/M/L> — files: <list> — depends-on: <prereq> — suitable: <agent type>
+## Open
+1. **<ID>** <one-line> — <effort> — surfaces: <list> — depends-on: <prereq> — suitable: <executor>
 2. ...
 
 ## Connections + conflicts
@@ -149,15 +186,27 @@ Sessions on 2026-05-09 + 2026-05-10 produced multi-section warroom checkpoints i
 - A ⨯ D (CONFLICT — sequence required)
 
 ## Constraints
-- <parallel session zones>
-- <carte-blanche limits>
-- <paid-op gates>
-- <branch policies>
+- <permissions / scope>
+- <cost gates>
+- <parallel-actor zones>
+- <time windows>
+- <reversibility flags>
 
 ## Recommended next 3
-1. <highest-leverage> — why first — outcome — ETA
+1. <highest-leverage> — why first — outcome — ETA — who
 2. ...
 3. ...
 ```
+
+## Pairs with
+
+- `/remember:remember` — short-form handoff (≤ 20 lines). /warroom = long-form context, /remember = trail-marker.
+- `/op-secrets` — for any credential reads needed during status check (NEVER accept keys pasted in chat).
+
+## Spirit of the skill
+
+A war room isn't a status report. A status report says "here's what we did this week." A war room says "here's the current map of the initiative — these are the moves with leverage right now, and these are the constraints — pick three." The skill is about helping someone decide, not just summarizing.
+
+Bias toward giving the reader an actionable picture in under 5 minutes of reading. If your output takes longer to read, you've missed the point.
 
 For credentials and secrets, use the `/op-secrets` skill. NEVER accept keys pasted in chat.
