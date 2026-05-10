@@ -1,0 +1,13 @@
+{
+  "name": "claude-skill-google-stitch",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Bundled scripts for the google-stitch Claude Code skill. Run `npm install` once after first invocation.",
+  "type": "module",
+  "scripts": {
+    "postinstall": "echo 'google-stitch skill: deps installed. Scripts at ./scripts/ are ready.'"
+  },
+  "dependencies": {
+    "@google/stitch-sdk": "^0.3.4"
+  }
+}

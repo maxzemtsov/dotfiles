@@ -38,8 +38,9 @@ const edited = await screen.edit(editPrompt);
 const htmlUrl = await edited.getHtml();
 const imageUrl = await edited.getImage();
 
-const htmlPath = `.stitch/designs/${name}.html`;
-const imagePath = `.stitch/designs/${name}.png`;
+const outDir = process.env.STITCH_OUTPUT_DIR || ".stitch/designs";
+const htmlPath = `${outDir}/${name}.html`;
+const imagePath = `${outDir}/${name}.png`;
 await mkdir(dirname(htmlPath), { recursive: true });
 
 const htmlBody = await fetch(htmlUrl).then((r) => r.text());

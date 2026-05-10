@@ -9,9 +9,13 @@
 //   STITCH_PROJECT_ID   optional; defaults to first project on account
 //
 // Output:
-//   .stitch/designs/<output-name>.html   rendered HTML
-//   .stitch/designs/<output-name>.png    screenshot
+//   <STITCH_OUTPUT_DIR or .stitch/designs>/<output-name>.html   rendered HTML
+//   <STITCH_OUTPUT_DIR or .stitch/designs>/<output-name>.png    screenshot
 //   stdout: JSON { screenId, htmlPath, imagePath }
+//
+// Iteration-2 fix: STITCH_OUTPUT_DIR env var lets callers override the
+// hardcoded `.stitch/designs/` path without copying files post-generation.
+// Useful for QA harnesses, eval suites, and embedding in larger flows.
 //
 // Why a script (not inline cat-heredoc): the same generate-then-save pattern
 // repeats across every Stitch call. Bundling means one source of truth for
@@ -57,8 +61,9 @@ const screen = await project.generate(prompt, device);
 const html = await screen.getHtml();
 const image = await screen.getImage();
 
-const htmlPath = `.stitch/designs/${name}.html`;
-const imagePath = `.stitch/designs/${name}.png`;
+const outDir = process.env.STITCH_OUTPUT_DIR || ".stitch/designs";
+const htmlPath = `${outDir}/${name}.html`;
+const imagePath = `${outDir}/${name}.png`;
 await mkdir(dirname(htmlPath), { recursive: true });
 
 // html + image are URLs that Stitch hosts; download them.

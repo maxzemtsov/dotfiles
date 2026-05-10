@@ -36,8 +36,9 @@ let i = 0;
 for (const v of variants) {
   const htmlUrl = await v.getHtml();
   const imageUrl = await v.getImage();
-  const htmlPath = `.stitch/designs/variant-${i}-${v.id}.html`;
-  const imagePath = `.stitch/designs/variant-${i}-${v.id}.png`;
+  const outDir = process.env.STITCH_OUTPUT_DIR || ".stitch/designs";
+  const htmlPath = `${outDir}/variant-${i}-${v.id}.html`;
+  const imagePath = `${outDir}/variant-${i}-${v.id}.png`;
   await mkdir(dirname(htmlPath), { recursive: true });
   const htmlBody = await fetch(htmlUrl).then((r) => r.text());
   const imageBuf = Buffer.from(await fetch(imageUrl).then((r) => r.arrayBuffer()));

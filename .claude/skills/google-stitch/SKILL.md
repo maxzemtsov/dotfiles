@@ -9,24 +9,56 @@ Expert UI designer using **Google Stitch** (Gemini 2.5 backed) to render high-fi
 
 For credentials and secrets, use the `/op-secrets` skill. NEVER accept keys pasted in chat.
 
-## First-time setup (run once per session)
+## First-time setup (run once per machine)
+
+The bundled scripts depend on `@google/stitch-sdk`. The skill ships with a
+`package.json` so installation is a one-liner. Do this ONCE per machine:
+
+```bash
+cd ~/.claude/skills/google-stitch && npm install
+```
+
+After that, every session just needs auth + project resolution:
 
 ```bash
 source ~/.zshrc 2>/dev/null
 export STITCH_API_KEY="$(op read 'op://Claude_Code/Stitch API Key/API Key')"
 
 # Discover project IDs (the CLI calls them `projectId`):
-node $CLAUDE_SKILL_DIR/scripts/list.mjs
+node ~/.claude/skills/google-stitch/scripts/list.mjs
 
-# Pick one and pin it for this session (otherwise generate.mjs uses the first):
+# Pick one and pin for this session (otherwise generate.mjs uses the first):
 export STITCH_PROJECT_ID="<id-from-list-output>"
+
+# Optional — override the default `.stitch/designs/` output location:
+export STITCH_OUTPUT_DIR="my/custom/path"
 ```
 
-`$CLAUDE_SKILL_DIR` is conventionally where Claude resolved this skill from. If unset, use the absolute path printed when this skill loaded, typically `~/.claude/skills/google-stitch/`.
+If `npm install` was skipped you'll see `ERR_MODULE_NOT_FOUND` on first run.
+That's the signal to do the one-time install — re-run the script after.
 
 ## The core idea
 
 Stitch turns text prompts into rendered HTML + screenshot. Quality is dominated by **prompt structure** — vague prompts produce generic output. The skill's value is the structured-prompt format below; the SDK is just plumbing.
+
+## Known-quirk: first-generation logo bootstrap
+
+On a project with NO prior screens, Stitch sometimes interprets the first
+`generate_screen_from_text` call as "make me a logo" rather than the full
+page described — it returns a tiny SVG (e.g., 160×40) regardless of how
+detailed your prompt is. Confirmed by 2 of 3 eval runs on 2026-05-10
+(both fresh-project starts on landing-page prompts).
+
+**Workaround**: after the first generate returns a logo-shaped output,
+run `scripts/edit.mjs <screenId> "Expand into the full landing page —
+render the entire page top-to-bottom with all sections from the original
+brief"`. The edit path bypasses the bootstrap heuristic and produces the
+full page. Edits don't count against the 350/month quota — this is also
+the cheaper path generally.
+
+If you suspect the project is fresh, you can also pre-warm by sending one
+throwaway "make a logo" request, then proceed with real generates against
+the now-warm project.
 
 ## Step 1 — Enhance the user's prompt
 

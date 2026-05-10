@@ -17,20 +17,44 @@ if (!process.env.STITCH_API_KEY) {
 
 const projectId = process.argv[2];
 
+// Iteration-2 fix: SDK objects have circular `client` back-references that
+// crash JSON.stringify. Project/screen instances embed self-loops via the
+// SDK's internal request handler. Fix: extract just the safe scalar fields
+// (id, name, createdAt, etc.) before serializing. Verified across 2 sub-
+// agent eval runs — both reported "TypeError: Converting circular structure".
+function safeProject(p) {
+  return {
+    id: p.id ?? null,
+    name: p.name ?? p.title ?? null,
+    createdAt: p.createdAt ?? p.created_at ?? null,
+    updatedAt: p.updatedAt ?? p.updated_at ?? null,
+  };
+}
+
+function safeScreen(s) {
+  return {
+    id: s.id ?? null,
+    name: s.name ?? s.title ?? null,
+    device: s.device ?? null,
+    createdAt: s.createdAt ?? s.created_at ?? null,
+  };
+}
+
 if (!projectId) {
   const projects = await stitch.projects();
   if (!projects.length) {
     console.log("No projects yet. Create one at https://stitch.withgoogle.com");
     process.exit(0);
   }
-  console.log(JSON.stringify(projects, null, 2));
+  const safe = projects.map(safeProject);
+  console.log(JSON.stringify(safe, null, 2));
   console.error(
-    `\n(${projects.length} project${projects.length === 1 ? "" : "s"}; ` +
-      `set STITCH_PROJECT_ID=${projects[0].id} for the default)`,
+    `\n(${safe.length} project${safe.length === 1 ? "" : "s"}; ` +
+      `set STITCH_PROJECT_ID=${safe[0].id} for the default)`,
   );
   process.exit(0);
 }
 
 const project = stitch.project(projectId);
 const screens = await project.screens();
-console.log(JSON.stringify(screens, null, 2));
+console.log(JSON.stringify(screens.map(safeScreen), null, 2));
