@@ -171,9 +171,17 @@ This tells the user "your project state is invisible to me; here's how to make i
 
 ## Output destination
 
-**Default**: render to chat as markdown, all 7 sections. Best for in-session decision-making.
+**ALWAYS render to chat AND save to disk** — every /warroom invocation produces both an in-chat report (best for in-session decision-making) and a persistent file (so the trail of decisions is reconstructible weeks later).
 
-**If user asks "save it" or "write it to a doc" or "I want to share this"**: write to `docs/WARROOM_<YYYY-MM-DD>.md` (or whatever the project's docs convention is). Mention the file path in chat so user can find it.
+**Save path** (in this order, pick the first that makes sense for the project):
+
+1. `<project_root>/warrooms/<YYYY-MM-DD>-<short-slug>.md` — preferred. Slug is a 2-4 word kebab-case summary like `cutover-prep`, `q4-launch`, `rls-audit`. If no clear slug, use just the date.
+2. If `<project_root>/warrooms/` doesn't exist, **create it** (no need to ask) and add to `.gitignore` only if the project is sensitive (work products, M&A, regulatory) — otherwise commit. Default: commit.
+3. Multiple warrooms on the same day get suffix: `2026-05-10-cutover-prep.md`, `2026-05-10-cutover-prep-2.md`, etc.
+
+Mention the file path in chat as a one-line confirmation: "Saved to `warrooms/2026-05-10-cutover-prep.md`."
+
+**Don't ask** "want me to save this?" — saving is the default. The user invoked /warroom; persistence is part of the value.
 
 **If invoked at session start as orientation**: ALSO summarize the 3 recommended actions at the very top in 3 sentences, BEFORE the full report. The user reads section 7 first if they're in a hurry; full report is for when they have time.
 
