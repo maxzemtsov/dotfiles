@@ -1,0 +1,82 @@
+[
+  {
+    "query": "I'm building a SaaS dashboard for my agency clients and want to make sure they actually engage with it weekly. The current version they barely open. Stack is Next.js 16 + Tailwind + shadcn. Can you design v2?",
+    "should_trigger": true
+  },
+  {
+    "query": "Сверстай мне страницу подписки для приложения медитации — у нас три тарифа (Basic $5, Plus $12, Premium $25), нужно чтобы как можно больше юзеров шли на Plus тариф а не на Basic",
+    "should_trigger": true
+  },
+  {
+    "query": "We're losing 60% of users in onboarding. Can you redesign the first 3 screens? It's a React Native fitness app, target audience is 35-55 year olds trying fitness apps for the first time",
+    "should_trigger": true
+  },
+  {
+    "query": "lay out a pricing page for my open-source SaaS tool. Free tier, $20 Team tier, $200 Enterprise. Need to maximize conversions specifically on the Team tier",
+    "should_trigger": true
+  },
+  {
+    "query": "I need to design a checkout flow for a $400 piece of furniture. Users currently abandon at the address-entry step. Stack: Next.js + Tailwind + shadcn",
+    "should_trigger": true
+  },
+  {
+    "query": "build a paywall screen for our iOS app — currently only 1.2% convert from free to paid. Users see it after about 8 sessions in the app on average",
+    "should_trigger": true
+  },
+  {
+    "query": "I want to redesign the empty state for our analytics dashboard. New users see zero data on first login and ~40% never come back. SwiftUI for iPad",
+    "should_trigger": true
+  },
+  {
+    "query": "помоги спроектировать landing для запуска нашего SaaS на ProductHunt — нужно конвертить трафик любопытных в реальных подписавшихся юзеров",
+    "should_trigger": true
+  },
+  {
+    "query": "spec out a marketing site for our YC W26 application — the design itself needs to convince investors we have product-market fit and serious aesthetic chops",
+    "should_trigger": true
+  },
+  {
+    "query": "design a settings page for my mobile app — users currently can't find the notification toggle and it generates 80% of support tickets. iOS native SwiftUI",
+    "should_trigger": true
+  },
+  {
+    "query": "add a button to my Next.js page, just need the shadcn Button component installed and a click handler that toasts 'Saved'",
+    "should_trigger": false
+  },
+  {
+    "query": "what are the 5 most important UX principles to remember when designing forms in general? Just want the principles, not a specific design",
+    "should_trigger": false
+  },
+  {
+    "query": "I need a quick mockup of a landing page just so I can show my designer roughly what I want — don't care about psychology, just a visual sketch",
+    "should_trigger": false
+  },
+  {
+    "query": "explain Hick's Law and how it applies in general to product design",
+    "should_trigger": false
+  },
+  {
+    "query": "install the aceternity bento-grid component into my Next.js project — here's the path: src/components/ui/, please run the install command",
+    "should_trigger": false
+  },
+  {
+    "query": "review my existing pricing page React code at app/pricing/page.tsx and tell me if it follows React 19 best practices and has any performance issues",
+    "should_trigger": false
+  },
+  {
+    "query": "what's the typical conversion rate for SaaS landing pages in fintech and how does it compare to e-commerce — looking for industry benchmarks",
+    "should_trigger": false
+  },
+  {
+    "query": "fix the bug in my modal where ESC key doesn't close it. The modal is at components/dialogs/ConfirmDialog.tsx and uses @radix-ui/react-dialog",
+    "should_trigger": false
+  },
+  {
+    "query": "what font should I use for a legal terms-of-service document — just the typography choice, no design needed, the page already exists",
+    "should_trigger": false
+  },
+  {
+    "query": "generate JSON-LD schema markup for my pricing page at example.com/pricing so it shows up properly in Google search results",
+    "should_trigger": false
+  }
+]
