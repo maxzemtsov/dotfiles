@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+#
+# ph — PostHog operator CLI (zero-MCP, 1Password-authenticated).
+#
+# A thin, portable wrapper around @posthog/cli that:
+#   1. self-authenticates by fetching your PostHog PERSONAL API key (phx_...) from
+#      1Password at runtime — NO secret ever lives in this repo,
+#   2. backstops the two dangerous op classes (DELETE + feature-flag toggle) so an
+#      accidental destructive `api call` fails closed unless PH_CONFIRM=1 is set.
+#
+# The PRIMARY gate is behavioural — the agent asks the user before any DELETE or
+# feature-flag enable/disable (see SKILL.md). This script is belt-and-suspenders.
+#
+# CONFIG (no secrets — only 1P coordinates + non-secret ids). Set via env or a
+# local, gitignored config file (default ~/.config/posthog-cli-skill/config.env;
+# copy config.example.env). Required: PH_OP_VAULT, PH_OP_ITEM. Optional:
+#   PH_OP_FIELD          label of the field holding your phx_ key  [default below]
+#   PH_OP_TOKEN_ENV      name of the env var holding your 1P SA token [OP_SERVICE_ACCOUNT_TOKEN]
+#   POSTHOG_CLI_PROJECT_ID   your PostHog project id (not a secret)
+#   POSTHOG_CLI_HOST     PostHog API host [https://us.posthog.com]
+#
+# Usage:  ph api search <regex> · ph api info <tool> · ph api call <tool> ['<json>']
+set -euo pipefail
+
+# --- load optional local config (gitignored; holds 1P coordinates, NOT secrets) ---
+PH_CONFIG="${PH_CONFIG:-$HOME/.config/posthog-cli-skill/config.env}"
+if [ -f "$PH_CONFIG" ]; then set -a; . "$PH_CONFIG"; set +a; fi
+
+# ---------------------------------------------------------------------------
+# 1) Destructive-op backstop — gate only REAL executions (`api call` w/o --dry-run).
+#    Discovery (tools/search/info/schema) and dry-run previews mutate nothing.
+# ---------------------------------------------------------------------------
+ARGS_LC="$(printf '%s ' "$@" | tr '[:upper:]' '[:lower:]')"
+needs_confirm=0
+is_exec=0
+case " $ARGS_LC " in *" call "*) is_exec=1 ;; esac
+case "$ARGS_LC" in *--dry-run*) is_exec=0 ;; esac
+if [ "$is_exec" = "1" ]; then
+  case "$ARGS_LC" in *delete*) needs_confirm=1 ;; esac          # delete-*, *-bulk-delete-*, --method delete
+  if printf '%s' "$ARGS_LC" | grep -q 'feature' \
+     && printf '%s' "$ARGS_LC" | grep -Eq '"active"|active=|"enabled"|enable|disable'; then
+    needs_confirm=1                                             # feature-flag enable/disable
+  fi
+fi
+if [ "$needs_confirm" = "1" ] && [ "${PH_CONFIRM:-}" != "1" ]; then
+  echo "REFUSED: destructive / prod-affecting op (DELETE or feature-flag toggle)." >&2
+  echo "These need the user's explicit OK first. After the user confirms, re-run with PH_CONFIRM=1." >&2
+  exit 3
+fi
+
+# ---------------------------------------------------------------------------
+# 2) Resolve config + auth from 1Password (single op call; key never echoed)
+# ---------------------------------------------------------------------------
+PH_OP_FIELD="${PH_OP_FIELD:-PostHog Personal API Key}"
+export POSTHOG_CLI_HOST="${POSTHOG_CLI_HOST:-https://us.posthog.com}"
+
+if [ -z "${PH_OP_VAULT:-}" ] || [ -z "${PH_OP_ITEM:-}" ]; then
+  echo "ERROR: skill not configured. Copy config.example.env -> $PH_CONFIG and set PH_OP_VAULT / PH_OP_ITEM" >&2
+  echo "       (+ PH_OP_FIELD, POSTHOG_CLI_PROJECT_ID). See the skill dir's config.example.env." >&2
+  exit 2
+fi
+
+# 1Password service-account token: prefer an already-exported OP_SERVICE_ACCOUNT_TOKEN,
+# else the var named by PH_OP_TOKEN_ENV (resolved from this env, then from a login shell).
+if [ -z "${OP_SERVICE_ACCOUNT_TOKEN:-}" ]; then
+  tok_env="${PH_OP_TOKEN_ENV:-OP_SERVICE_ACCOUNT_TOKEN}"
+  tok="${!tok_env:-}"
+  [ -z "$tok" ] && tok="$(zsh -ic "printf %s \"\${$tok_env:-}\"" 2>/dev/null || true)"
+  export OP_SERVICE_ACCOUNT_TOKEN="$tok"
+fi
+if [ -z "${OP_SERVICE_ACCOUNT_TOKEN:-}" ]; then
+  echo "ERROR: no 1Password service-account token. Export OP_SERVICE_ACCOUNT_TOKEN or set PH_OP_TOKEN_ENV." >&2
+  echo "       For credentials, use the /op-secrets skill. Never paste keys in chat." >&2
+  exit 2
+fi
+
+POSTHOG_CLI_API_KEY="$(op item get "$PH_OP_ITEM" --vault "$PH_OP_VAULT" --fields "label=$PH_OP_FIELD" --reveal 2>/dev/null || true)"
+POSTHOG_CLI_API_KEY="${POSTHOG_CLI_API_KEY%\"}"; POSTHOG_CLI_API_KEY="${POSTHOG_CLI_API_KEY#\"}"
+export POSTHOG_CLI_API_KEY
+if [ -z "${POSTHOG_CLI_API_KEY:-}" ]; then
+  echo "ERROR: could not read field '$PH_OP_FIELD' from item '$PH_OP_ITEM' (vault '$PH_OP_VAULT')." >&2
+  echo "       Check the field label, vault access, or 1Password rate limit." >&2
+  exit 2
+fi
+export POSTHOG_CLI_PROJECT_ID="${POSTHOG_CLI_PROJECT_ID:-}"
+
+# ---------------------------------------------------------------------------
+# 3) Run the real CLI. stdout streams live; stderr is buffered only so we can
+#    strip the CLI's own harmless telemetry-flush block (a TLS error on exit,
+#    emitted last) — any REAL error happens earlier and is kept. Exit preserved.
+# ---------------------------------------------------------------------------
+export DO_NOT_TRACK="${DO_NOT_TRACK:-1}"   # ignored by current CLI; harmless + future-proof
+err_tmp="$(mktemp -t ph_err.XXXXXX)"
+trap 'rm -f "$err_tmp"' EXIT
+rc=0
+npx -y @posthog/cli@latest "$@" 2>"$err_tmp" || rc=$?
+awk '/Error while flushing PostHog/{skip=1} !skip' "$err_tmp" >&2 || true
+exit "$rc"
