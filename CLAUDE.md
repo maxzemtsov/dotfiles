@@ -2,18 +2,16 @@
 
 ## Personal skill overrides
 
-Skills `op-secrets` and `render-deploy` ship as public templates with placeholders.
+Skill `op-secrets` ships as a public template with placeholders.
 Real project-specific config lives in `personal/` — gitignored, local only:
 
 ```
 dotfiles/
   .claude/skills/
     op-secrets/SKILL.md        ← public template (Project1/Project2 placeholders)
-    render-deploy/SKILL.md     ← public template (generic setup)
   personal/                    ← gitignored, this machine only
     op-secrets/SKILL.md        ← real vault names, OP_SA_* token variables
-    render-deploy/SKILL.md     ← real service IDs and production URLs
 ```
 
 `install.sh` installs public skills first, then overlays `personal/` — so
-`/op-secrets` and `/render-deploy` use private versions locally.
+`/op-secrets` uses the private version locally.

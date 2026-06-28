@@ -21,7 +21,6 @@ Skills load automatically. Invoke with `/<skill-name>` in any Claude Code sessio
 |-------|--------|-------------|
 | `op-secrets` | `/op-secrets` | Secure secrets via 1Password CLI — fetch credentials without exposing them in chat. Use before any skill that needs API keys or tokens. |
 | `aws-cli` | `/aws-cli` | AWS CLI setup and common commands. Credentials always via `/op-secrets`. |
-| `render-deploy` | `/render-deploy` | Manage Render.com services — deploy, restart, logs, rollback. Configure your services in `personal/render-deploy/SKILL.md`. |
 | `ux-psychology` | `/ux-psychology` | Apply 106 cognitive biases and UX psychology principles to product and UI design decisions. |
 | `shadcn-ui` | `/shadcn-ui` | shadcn/ui CLI — init projects, add components, search registries, view docs. |
 | `21st-dev` | `/21st-dev` | Install production-grade UI components from 21st.dev (1400+ React + Tailwind blocks). |
@@ -39,7 +38,6 @@ Every skill that needs credentials **must** use `/op-secrets`. Never paste keys 
 ```
 ~/.claude/skills/              ← symlinks created by install.sh
     op-secrets/   →  ~/dotfiles/.claude/skills/op-secrets/
-    render-deploy/ → ~/dotfiles/.claude/skills/render-deploy/
     ux-psychology/ → ~/dotfiles/.claude/skills/ux-psychology/
     shadcn-ui/    →  ~/dotfiles/.claude/skills/shadcn-ui/
     21st-dev/     →  ~/dotfiles/.claude/skills/21st-dev/
@@ -92,6 +90,8 @@ bash ~/dotfiles/install.sh
 
 Optional dependencies by skill:
 
+### macOS (Homebrew)
+
 ```bash
 # /op-secrets — 1Password CLI beta
 brew install --cask 1password-cli@beta
@@ -104,7 +104,51 @@ brew install awscli
 node --version
 ```
 
+### Linux (x86_64)
+
+```bash
+# /op-secrets — 1Password CLI
+OP_VER=2.31.1
+curl -fsSL "https://cache.agilebits.com/dist/1P/op2/pkg/v${OP_VER}/op_linux_amd64_v${OP_VER}.zip" -o op.zip
+unzip -o op.zip op -d /tmp/op-cli
+sudo install /tmp/op-cli/op /usr/local/bin/op
+op --version
+
+# /aws-cli — official v2 bundle
+curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o awscliv2.zip
+unzip -q awscliv2.zip
+sudo ./aws/install --update
+aws --version
+
+# /shadcn-ui and /21st-dev — Node.js required
+node --version
+```
+
+> On `arm64` (e.g. Graviton, Apple Silicon under Linux) swap `amd64`→`arm64` in the
+> `op` URL and `x86_64`→`aarch64` in the AWS URL.
+
 After install, create `~/dotfiles/personal/` with your private skill overrides (see Personal overrides above).
+
+---
+
+## Running in Claude Code on the web (remote sandbox)
+
+Web/cloud sessions run in an **ephemeral container with a policy-enforced egress
+proxy** — not your Mac. Two things differ from a local install:
+
+1. **`OP_SERVICE_ACCOUNT_TOKEN` is not inherited.** The op-secrets architecture
+   relies on the SA token being exported from your local `~/.zshrc`. In a remote
+   sandbox you must supply it through the environment's configured env vars.
+2. **1Password downloads may be blocked.** Installing `op` fetches from
+   `cache.agilebits.com` / `downloads.1password.com`; if these aren't on the
+   environment's network allowlist the download returns `403` and `/op-secrets`
+   can't run. AWS endpoints and `awscli.amazonaws.com` are generally reachable.
+
+To use `/op-secrets` (and therefore `/aws-cli` with real credentials) in a web
+session, the environment needs **both**: the 1Password domains allowlisted **and**
+`OP_SERVICE_ACCOUNT_TOKEN` provided. See
+<https://code.claude.com/docs/en/claude-code-on-the-web> for network policy and
+env var configuration. For local Mac sessions neither step is needed.
 
 ---
 
