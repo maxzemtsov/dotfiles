@@ -51,10 +51,12 @@ subtasks**, following these defaults:
 2. **Ownership** — assign **engineering** tasks to yourself by default
    (`--assignee <yourUserId>`); leave non-eng tasks unassigned or to the owner.
 3. **Deadlines** — set an **auto due-date of +N days**, where N is your honest
-   estimate of the effort (`--due "+Nd"`). Spread subtask dates inside the
-   parent's window when it helps.
+   estimate of the effort. `cup --due-date` takes an absolute `YYYY-MM-DD` (no
+   relative dates), so compute it: `date -v+Nd +%Y-%m-%d` (macOS) /
+   `date -d "+N days" +%Y-%m-%d` (Linux).
 4. **Blocking** — where one item genuinely blocks another, wire a dependency so
-   blockers are visible: `cup dependency add <task> --depends-on <blockerTask>`.
+   blockers are visible: `cup depend <task> --on <blockerTask>` (the task waits
+   on the blocker).
 5. **Confirm before creating**, and name the concrete destination — say
    *"Putting into ClickUp `<Space> → <list>`: parent X + 3 subtasks, due …,
    assignee <you> — ok?"*, never a vague "add to the backlog?". If declined,
@@ -63,20 +65,21 @@ subtasks**, following these defaults:
 ### Example
 
 ```bash
-# 1) parent
-PID=$(cup task create --list <listId> --name "Fix the spam problem" \
-        --assignee <yourUserId> --priority high --due "+3d" --json | jq -r '.id')
-# 2) subtasks under the parent
-S1=$(cup task create --list <listId> --parent "$PID" --name "Collect spam samples" --json | jq -r '.id')
-S2=$(cup task create --list <listId> --parent "$PID" --name "Analyze patterns" --json | jq -r '.id')
-S3=$(cup task create --list <listId> --parent "$PID" --name "Ship the filter" --json | jq -r '.id')
+DUE=$(date -v+3d +%Y-%m-%d)   # macOS; effort estimate = 3 days
+# 1) parent  (-l list, -n name)
+PID=$(cup create -n "Fix the spam problem" -l <listId> \
+        --assignee <yourUserId> --priority high --due-date "$DUE" --json | jq -r '.id')
+# 2) subtasks under the parent  (-p parent; -l auto-detected from parent)
+S1=$(cup create -n "Collect spam samples" -p "$PID" --json | jq -r '.id')
+S2=$(cup create -n "Analyze patterns"     -p "$PID" --json | jq -r '.id')
+S3=$(cup create -n "Ship the filter"      -p "$PID" --json | jq -r '.id')
 # 3) blocking chain: S2 waits on S1, S3 waits on S2
-cup dependency add "$S2" --depends-on "$S1"
-cup dependency add "$S3" --depends-on "$S2"
+cup depend "$S2" --on "$S1"
+cup depend "$S3" --on "$S2"
 ```
 
-Verify exact flag names with `cup task create --help` and
-`cup dependency --help` — the CLI is the source of truth.
+Verify exact flag names with `cup create --help` and `cup depend --help` — the
+CLI is the source of truth.
 
 ## Everyday phrases that should trigger this skill
 
