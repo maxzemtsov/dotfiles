@@ -32,7 +32,19 @@ Do NOT fire when:
 - Just a mockup with no rationale needed → use `/google-stitch` directly
 - Implementing an already-designed surface (code-level work) → use the relevant component skill directly
 
-## The six-phase workflow
+## The seven-phase workflow
+
+### Phase 0 — Project design canon check (silent, before asking the user anything)
+
+Before Phase 1, check whether the target project already has a governing design system. Do NOT ask the user about this — just look:
+
+1. **Project-scoped sub-skill override.** Does a `.claude/skills/ui-ux-pro-max/` (or `.claude/skills/<visual-system-skill>/`) exist INSIDE the project, distinct from the global one? A project-local copy is a strong signal it's been hardened against this project's own brand — read it first, it wins over anything generic in Phase 3.
+2. **Canonical docs.** Look for `docs/docs-index.json`, `docs/DESIGN_SYSTEM.md`, `docs/DESIGN_TOKENS.md`, `STYLE_GUIDE.md`, or an ADR/decisions log mentioning "design system". If found, open it and read its frontmatter `title` + `status` fields — that tells you the CURRENT canonical name and version (e.g. a project might be on "v2", "DS3", "DS4" by the time you read this; never assume a specific name is still current — re-derive it from the doc every time, don't cache it in your own reasoning across sessions).
+3. **Banned-pattern rules.** Check the project's root `CLAUDE.md` / `AGENTS.md` for banned icons, effects, colors, or components (e.g. "never use sparkle/star icons", "no radar charts"). This must gate Phase 4's component suggestions, not just Phase 3's palette.
+
+If a canonical design system exists: Phase 3 does NOT invent a new palette/style/font — it reads the existing token/rule authority and maps the Phase 2 psychology list onto tokens that already exist. Phase 4 filters out any component suggestion that conflicts with the project's banned-pattern rules found in step 3.
+
+If nothing exists (true greenfield): proceed to Phase 3 as originally designed, generating a fresh palette/style/font pairing.
 
 ### Phase 1 — Intent capture (you ask the user, briefly)
 
@@ -68,16 +80,16 @@ The output format you want from this stage:
 
 ### Phase 3 — Visual system planning
 
-Invoke `/ui-ux-pro-max` with the phase 2 psychology list as INPUT. Specifically ask it to:
+Invoke `/ui-ux-pro-max` with the phase 2 psychology list as INPUT — AND with the Phase 0 finding (governed vs greenfield). Specifically ask it to:
 
-1. **Pick a style direction** that *amplifies* the chosen biases. Examples:
+1. **Pick a style direction** that *amplifies* the chosen biases, WITHIN the project's existing visual grammar if Phase 0 found one (don't suggest Brutalism into a project whose canon says "quiet foundation, continuous canvases over card soup" — amplify the chosen bias using the tokens/primitives that already exist). Examples of the amplification logic itself, not a menu to pick from ignoring canon:
    - Minimalism → amplifies Hick's Law #1 (fewer choices) and Cognitive Load #4
    - Bento grid → amplifies Chunking #95 (grouped info) and Law of Proximity #24
    - Brutalism → amplifies Von Restorff Effect #12 (stands out)
    - Glassmorphism → amplifies Aesthetic-Usability Effect #29 (premium feel)
    - Skeuomorphism → amplifies Familiarity Bias #34 and Mental Model #33
 
-2. **Choose a 4-6 color palette** anchored to emotional outcomes for the goal:
+2. **Choose a 4-6 color palette** — but if Phase 0 found a governed token system, this step is "select which EXISTING semantic tokens carry each emotional outcome," never new hex. Only invent raw hex/fonts from scratch on a true greenfield project:
    - Trust → navy blues, muted greens
    - Urgency → orange, warm reds (use sparingly per Banner Blindness #16)
    - Premium → muted neutrals + one accent
@@ -91,6 +103,8 @@ Invoke `/ui-ux-pro-max` with the phase 2 psychology list as INPUT. Specifically 
 ### Phase 4 — Component sourcing (parallel)
 
 Invoke `/21st-dev` and `/aceternity-ui` IN PARALLEL — they're independent. Pass each the visual system from phase 3 + the element list.
+
+**Filter every suggestion against Phase 0's banned-pattern list before presenting it.** Neither `/21st-dev` nor `/aceternity-ui` know a specific project's bans (they're generic registries) — sparkle/star effects, decorative gradients, or specific banned icons are easy to recommend by default (e.g. `sparkles`/`aurora-background` below) and easy to silently ship if nothing checks them. This skill checks; the sub-skills don't.
 
 - **`/21st-dev`** for production-grade structural components: buttons, cards, forms, tables, navigation, dropdowns, dialogs, sheets, popovers. Get install commands + file paths.
 - **`/aceternity-ui`** for effect/animation components where psychology calls for them:
@@ -138,7 +152,7 @@ Produce ONE final document combining all phases. Use this exact template:
 
 ## Visual System (Phase 3)
 - **Style:** [direction] — rationale: [which principle it amplifies]
-- **Palette:** `#hex1` `#hex2` `#hex3` `#hex4` `#hex5` — emotional rationale per color
+- **Palette:** on a governed project, existing token names (`bg-bg-1`, `text-ink-900`, …) — never invented hex; on true greenfield only, `#hex1` `#hex2` `#hex3` `#hex4` `#hex5` — emotional rationale per color either way
 - **Typography:** [Heading font] / [Body font] — tone rationale
 - **Layout:** [grid description, hierarchy notes]
 
@@ -194,11 +208,13 @@ Pass enough context so each sub-skill can do its job without re-asking. Your job
 
 ### Parallel vs sequential
 
-Phases 2 → 3 → 4 → 5 are SEQUENTIAL — each output informs the next.
+Phase 0 is a silent lookup, not a sub-skill call — do it before Phase 1, cheaply. Phases 2 → 3 → 4 → 5 are SEQUENTIAL — each output informs the next.
 
 WITHIN phase 4, `/21st-dev` and `/aceternity-ui` run in PARALLEL (independent registries). Send both calls in the same Skill-tool turn if the harness supports it; otherwise back-to-back.
 
 ## Anti-patterns
+
+DON'T skip Phase 0. Inventing a palette or recommending a decorative effect into a project that already has a locked design system (or a banned-pattern list) is exactly the kind of decoration this skill exists to prevent — check before you plan, not after the user flags the drift.
 
 DON'T skip phase 2 ("let's just design first, add psychology later"). Psychology after-the-fact is rationalization, not design. The whole point of this skill is to refuse that order.
 
