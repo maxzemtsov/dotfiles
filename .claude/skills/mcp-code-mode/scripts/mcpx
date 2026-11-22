@@ -1,0 +1,450 @@
+#!/usr/bin/env node
+// mcpx — "code mode" for MCP servers: search / describe / call through the shell,
+// so tool definitions never enter the model's context window.
+// Thin wrapper over mcporter (https://github.com/openclaw/mcporter). No dependencies.
+// Holds no secrets: auth is whatever mcporter resolves (its OAuth vault, or ${ENV}
+// placeholders filled by `op run`). Never prints headers, env values or tokens.
+
+import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+const HOME = os.homedir();
+const CACHE_DIR = process.env.MCPX_CACHE_DIR || path.join(HOME, '.cache', 'mcpx');
+const CONFIG = process.env.MCPX_CONFIG || path.join(HOME, '.mcporter', 'mcporter.json');
+const OP_REFS = process.env.MCPX_OP_REFS || path.join(HOME, '.config', 'mcpx', 'config.json');
+const TTL_MS = Number(process.env.MCPX_TTL_HOURS || 24) * 3600_000;
+const MAX_CHARS = Number(process.env.MCPX_MAX_CHARS || 12000);
+// Measured on this machine (see README): Claude counts ~2.0–2.5 chars of
+// {name, description, input_schema} JSON per token. Override if you re-calibrate.
+const CHARS_PER_TOKEN = Number(process.env.MCPX_CHARS_PER_TOKEN || 2.3);
+const DESTRUCTIVE =
+  /(^|[_.\-])(delete|remove|destroy|drop|purge|trash|erase|wipe|truncate|revoke|cancel|archive|send|reply|forward|publish|post|deploy|merge|pay|refund|transfer|charge|execute|run|exec|eval|write|overwrite|reset|disable|terminate|kill|share)([_.\-]|$)/i;
+
+const argv = process.argv.slice(2);
+const cmd = argv.shift();
+
+function flag(name, hasValue = false) {
+  const i = argv.indexOf(name);
+  if (i === -1) return hasValue ? undefined : false;
+  if (!hasValue) {
+    argv.splice(i, 1);
+    return true;
+  }
+  const v = argv[i + 1];
+  argv.splice(i, 2);
+  return v;
+}
+
+function die(msg, code = 1) {
+  process.stderr.write(`mcpx: ${msg}\n`);
+  process.exit(code);
+}
+
+// 1Password: ~/.config/mcpx/config.json maps the ${ENV} placeholders used in the
+// mcporter config to op:// references. Values are resolved by `op run` inside the child
+// process only (and masked on its output) — this script never sees or prints them.
+//   { "tokenEnv": "OP_SERVICE_ACCOUNT_TOKEN", "refs": { "FOO_API_KEY": "op://Vault/Item/field" } }
+function opEnvFor(server) {
+  const cfg = readJson(OP_REFS);
+  if (!cfg?.refs || !server) return undefined;
+  const raw = fs.existsSync(CONFIG) ? fs.readFileSync(CONFIG, 'utf8') : '';
+  let entry = raw;
+  const parsed = parseJson(raw);
+  if (parsed?.mcpServers) entry = JSON.stringify(parsed.mcpServers[server] ?? {});
+  const needed = Object.entries(cfg.refs).filter(([k]) => entry.includes('${' + k) || entry.includes('$env:' + k));
+  if (!needed.length) return undefined;
+  const env = Object.fromEntries(needed);
+  const tokenEnv = (cfg.tokenEnv || 'OP_SERVICE_ACCOUNT_TOKEN').replace(/[^A-Za-z0-9_]/g, '');
+  let token = process.env[tokenEnv];
+  if (!token) {
+    // non-interactive shells do not load ~/.zshrc, where the service-account token lives
+    const r = spawnSync('zsh', ['-c', `source ~/.zshrc >/dev/null 2>&1; printenv ${tokenEnv}`], { encoding: 'utf8' });
+    token = (r.stdout || '').trim();
+  }
+  if (!token) die(`server "${server}" needs 1Password, but the ${tokenEnv} variable is not set. See the /op-secrets skill.`);
+  env.OP_SERVICE_ACCOUNT_TOKEN = token;
+  return env;
+}
+
+function mcporter(args, { timeoutMs = 120_000, server } = {}) {
+  const base = fs.existsSync(CONFIG) ? ['--config', CONFIG] : [];
+  const opEnv = opEnvFor(server);
+  const bin = opEnv ? 'op' : 'mcporter';
+  const full = opEnv ? ['run', '--', 'mcporter', ...base, ...args] : [...base, ...args];
+  const r = spawnSync(bin, full, {
+    encoding: 'utf8',
+    timeout: timeoutMs,
+    maxBuffer: 256 * 1024 * 1024,
+    cwd: HOME, // imports resolve from the home configs, not the current repo
+    env: { ...process.env, ...opEnv, MCPORTER_OAUTH_NO_BROWSER: process.env.MCPORTER_OAUTH_NO_BROWSER ?? '1' },
+  });
+  if (r.error && r.error.code === 'ENOENT') {
+    die('mcporter is not installed. Run: npm install -g mcporter   (needs Node 24+)');
+  }
+  return r;
+}
+
+function parseJson(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+}
+
+function serverNames() {
+  const names = new Set();
+  for (const src of ['local', 'import']) {
+    const r = mcporter(['config', 'list', '--source', src, '--json']);
+    const d = parseJson(r.stdout);
+    for (const s of d?.servers ?? []) names.add(s.name);
+  }
+  return [...names].sort();
+}
+
+function cacheFile(server) {
+  return path.join(CACHE_DIR, `${server.replace(/[^A-Za-z0-9._-]/g, '_')}.json`);
+}
+
+// Returns { name, status, tools:[{name,description,inputSchema,annotations}], error?, fetchedAt }
+function loadServer(server, { refresh = false } = {}) {
+  const file = cacheFile(server);
+  if (!refresh && fs.existsSync(file)) {
+    const c = parseJson(fs.readFileSync(file, 'utf8'));
+    if (c && Date.now() - c.fetchedAt < TTL_MS && c.status === 'ok') return c;
+  }
+  const r = mcporter(['list', server, '--json', '--no-oauth', '--timeout', '30000'], { server });
+  const d = parseJson(r.stdout) ?? {};
+  const entry = {
+    name: server,
+    status: d.status ?? 'error',
+    error: d.error ?? (d.status ? undefined : (r.stderr || '').trim().split('\n').pop()),
+    instructions: d.instructions,
+    transport: d.transport,
+    fetchedAt: Date.now(),
+    tools: (d.tools ?? []).map((t) => ({
+      name: t.name,
+      description: t.description ?? '',
+      inputSchema: t.inputSchema ?? { type: 'object', properties: {} },
+      annotations: t.annotations ?? t.options?.annotations,
+    })),
+  };
+  fs.mkdirSync(CACHE_DIR, { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(entry));
+  return entry;
+}
+
+function oneLine(text, max = 110) {
+  const s = String(text || '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const first = s.split(/(?<=[.!?])\s/)[0] || s;
+  return first.length > max ? `${first.slice(0, max - 1)}…` : first;
+}
+
+function splitSelector(sel) {
+  if (!sel || !sel.includes('.')) die(`expected <server.tool>, got "${sel ?? ''}"`);
+  const i = sel.indexOf('.');
+  return [sel.slice(0, i), sel.slice(i + 1)];
+}
+
+function findTool(server, tool) {
+  const s = loadServer(server);
+  if (s.status !== 'ok') die(`server "${server}" is not reachable (${s.error || s.status}). Try: mcpx servers`);
+  const t = s.tools.find((x) => x.name === tool) || s.tools.find((x) => x.name.toLowerCase() === tool.toLowerCase());
+  if (!t) die(`no tool "${tool}" on "${server}". Try: mcpx search ${tool} --server ${server}`);
+  return t;
+}
+
+function defTokens(tools) {
+  const chars = tools.reduce(
+    (n, t) => n + JSON.stringify({ name: t.name, description: t.description, input_schema: t.inputSchema }).length,
+    0,
+  );
+  return Math.round(chars / CHARS_PER_TOKEN);
+}
+
+// ---------- TypeScript-ish signature (compact; what `describe` prints) ----------
+function tsType(s, depth = 0) {
+  if (!s || typeof s !== 'object') return 'unknown';
+  if (s.enum) return s.enum.map((v) => JSON.stringify(v)).join(' | ');
+  if (s.const !== undefined) return JSON.stringify(s.const);
+  const alt = s.anyOf || s.oneOf;
+  if (alt) return alt.map((x) => tsType(x, depth)).join(' | ');
+  const type = Array.isArray(s.type) ? s.type.filter((t) => t !== 'null')[0] : s.type;
+  if (type === 'array') return `${tsType(s.items, depth)}[]`;
+  if (type === 'object' || s.properties) {
+    if (!s.properties || depth >= 3) return 'object';
+    const req = new Set(s.required || []);
+    const pad = '  '.repeat(depth + 1);
+    const lines = Object.entries(s.properties).map(([k, v]) => {
+      const doc = v.description ? `  // ${oneLine(v.description, 300)}` : '';
+      return `${pad}${k}${req.has(k) ? '' : '?'}: ${tsType(v, depth + 1)};${doc}`;
+    });
+    return `{\n${lines.join('\n')}\n${'  '.repeat(depth)}}`;
+  }
+  if (type === 'integer') return 'number';
+  return type || 'unknown';
+}
+
+// ------------------------------- commands ---------------------------------------
+function cmdServers() {
+  const refresh = flag('--refresh');
+  const json = flag('--json');
+  const rows = serverNames().map((n) => {
+    const s = loadServer(n, { refresh });
+    return {
+      server: n,
+      status: s.status === 'ok' ? 'ok' : `unreachable (${s.error || s.status})`,
+      tools: s.tools.length,
+      def_tokens_est: s.status === 'ok' ? defTokens(s.tools) : null,
+    };
+  });
+  if (json) return console.log(JSON.stringify(rows));
+  for (const r of rows) console.log(`${r.server}\t${r.status}\t${r.tools} tools\t~${r.def_tokens_est ?? '?'} tokens of definitions`);
+}
+
+function cmdSearch() {
+  const only = flag('--server', true);
+  const limit = Number(flag('--limit', true) || 12);
+  const refresh = flag('--refresh');
+  const query = argv.join(' ').trim();
+  if (!query) die('usage: mcpx search <query> [--server name] [--limit 12] [--refresh]');
+  const terms = query.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  const hits = [];
+  const skipped = [];
+  for (const name of only ? [only] : serverNames()) {
+    const s = loadServer(name, { refresh });
+    if (s.status !== 'ok') {
+      skipped.push(name);
+      continue;
+    }
+    for (const t of s.tools) {
+      const nm = `${name} ${t.name}`.toLowerCase();
+      const ds = t.description.toLowerCase();
+      let score = 0;
+      for (const term of terms) {
+        if (nm.includes(term)) score += 3;
+        if (ds.includes(term)) score += 1;
+      }
+      if (score > 0) hits.push({ score, line: `${name}.${t.name} — ${oneLine(t.description)}` });
+    }
+  }
+  hits.sort((a, b) => b.score - a.score);
+  if (!hits.length) console.log(`no tools match "${query}"`);
+  for (const h of hits.slice(0, limit)) console.log(h.line);
+  if (hits.length > limit) console.log(`… ${hits.length - limit} more (raise --limit or narrow with --server)`);
+  if (skipped.length) console.log(`(unreachable, not searched: ${skipped.join(', ')})`);
+}
+
+function cmdDescribe() {
+  const json = flag('--json');
+  const [server, tool] = splitSelector(argv[0]);
+  const t = findTool(server, tool);
+  if (json) return console.log(JSON.stringify({ name: t.name, description: t.description, inputSchema: t.inputSchema }));
+  const hints = [];
+  if (t.annotations?.readOnlyHint) hints.push('read-only');
+  const trusted = (readJson(OP_REFS)?.trusted ?? []).includes(`${server}.${t.name}`);
+  if (trusted) hints.push('meta-tool: the payload decides; confirm destructive payloads with the user yourself');
+  else if (t.annotations?.destructiveHint || DESTRUCTIVE.test(t.name)) hints.push('DESTRUCTIVE: confirm with the user, then pass --yes');
+  console.log(`${server}.${t.name}${hints.length ? `  [${hints.join('; ')}]` : ''}`);
+  console.log(t.description.trim());
+  console.log(`\nargs: ${tsType(t.inputSchema)}`);
+  console.log(`\ncall: mcpx call ${server}.${t.name} '<json args>'`);
+}
+
+function cmdCall() {
+  const yes = flag('--yes');
+  const full = flag('--full');
+  const out = flag('--out', true);
+  const maxChars = Number(flag('--max-chars', true) || MAX_CHARS);
+  const timeout = flag('--timeout', true);
+  const [server, tool] = splitSelector(argv[0]);
+  let args = argv[1] ?? '{}';
+  if (args === '-') args = fs.readFileSync(0, 'utf8');
+  else if (args.startsWith('@')) args = fs.readFileSync(args.slice(1), 'utf8');
+  if (parseJson(args) === undefined) die('arguments must be one JSON object, e.g. \'{"query":"x"}\' (or @file.json, or - for stdin)');
+
+  const t = findTool(server, tool);
+  // "trusted" in ~/.config/mcpx/config.json: meta-tools (e.g. posthog.exec) whose NAME trips
+  // the guard but whose payload decides. The model then owns the judgement, per SKILL.md.
+  const trusted = (readJson(OP_REFS)?.trusted ?? []).includes(`${server}.${t.name}`);
+  const destructive = !trusted && (t.annotations?.destructiveHint === true || (!t.annotations?.readOnlyHint && DESTRUCTIVE.test(t.name)));
+  if (destructive && !yes) {
+    die(
+      `"${server}.${t.name}" looks destructive or outward-facing. Show the user the exact call and get an explicit yes, then re-run with --yes.`,
+      3,
+    );
+  }
+  const a = ['call', `${server}.${t.name}`, '--args', args, '--output', 'json', '--no-oauth'];
+  if (timeout) a.push('--timeout', timeout);
+  const r = mcporter(a, { timeoutMs: Number(timeout || 120_000) + 5000, server });
+  let text = (r.stdout || '').trim();
+  const parsed = parseJson(text);
+  if (parsed !== undefined) text = typeof parsed === 'string' ? parsed : JSON.stringify(parsed);
+  if (r.status !== 0) {
+    const err = (r.stderr || '').trim().split('\n').filter((l) => !/^\s+at /.test(l)).slice(-3).join('\n');
+    process.stderr.write(`mcpx: call failed (exit ${r.status})\n${err}\n`);
+    if (!text) process.exit(r.status || 1);
+  }
+  if (out) {
+    fs.writeFileSync(out, text);
+    console.log(`saved ${text.length} chars to ${out}`);
+    return;
+  }
+  if (!full && text.length > maxChars) {
+    const dir = path.join(CACHE_DIR, 'results');
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, `${server}.${t.name}.${Date.now()}.json`.replace(/[^A-Za-z0-9._-]/g, '_'));
+    fs.writeFileSync(file, text);
+    console.log(text.slice(0, maxChars));
+    console.log(`\n[mcpx: truncated ${text.length} → ${maxChars} chars. Full result: ${file} — read it with jq/grep, do not cat it]`);
+    return;
+  }
+  console.log(text);
+}
+
+// --- audit: what each harness loads, what it costs, what could move behind mcpx ---
+function readJson(p) {
+  try {
+    return JSON.parse(fs.readFileSync(p, 'utf8'));
+  } catch {
+    return undefined;
+  }
+}
+
+function claudeServers() {
+  const out = [];
+  const root = readJson(path.join(HOME, '.claude.json')) ?? {};
+  for (const [name, v] of Object.entries(root.mcpServers ?? {})) out.push({ harness: 'claude', name, kind: 'user', where: '~/.claude.json', url: v.url, stdio: v.command });
+  const proj = root.projects?.[process.cwd()];
+  for (const [name, v] of Object.entries(proj?.mcpServers ?? {})) out.push({ harness: 'claude', name, kind: 'project', where: `~/.claude.json → projects[${process.cwd()}]`, url: v.url, stdio: v.command });
+  const local = readJson(path.join(process.cwd(), '.mcp.json'));
+  for (const [name, v] of Object.entries(local?.mcpServers ?? {})) out.push({ harness: 'claude', name, kind: 'project', where: './.mcp.json', url: v.url, stdio: v.command });
+  // Plugin-provided servers: enabled plugins that ship a .mcp.json
+  const settings = readJson(path.join(HOME, '.claude', 'settings.json')) ?? {};
+  const installed = readJson(path.join(HOME, '.claude', 'plugins', 'installed_plugins.json'))?.plugins ?? {};
+  for (const [id, on] of Object.entries(settings.enabledPlugins ?? {})) {
+    if (!on) continue;
+    const dir = installed[id]?.[0]?.installPath;
+    if (!dir) continue;
+    const plugin = id.split('@')[0];
+    const mcp = readJson(path.join(dir, '.mcp.json')) ?? readJson(path.join(dir, '.claude-plugin', 'plugin.json'));
+    const servers = mcp?.mcpServers ?? (mcp && !mcp.name ? mcp : {});
+    for (const [name, v] of Object.entries(servers ?? {})) {
+      if (!v || typeof v !== 'object') continue;
+      out.push({ harness: 'claude', name: `plugin:${plugin}:${name}`, short: name, kind: 'plugin', where: `plugin ${id}`, url: v.url, stdio: v.command });
+    }
+  }
+  return out;
+}
+
+function codexServers() {
+  const r = spawnSync('codex', ['mcp', 'list', '--json'], { encoding: 'utf8', timeout: 30_000 });
+  const list = parseJson(r.stdout) ?? [];
+  return list.map((s) => ({
+    harness: 'codex',
+    name: s.name,
+    kind: s.enabled ? 'enabled' : 'disabled',
+    where: '~/.codex/config.toml (or a Codex plugin)',
+    url: s.transport?.url,
+    stdio: s.transport?.command,
+    enabled: s.enabled,
+  }));
+}
+
+// Exact tool counts (incl. claude.ai connectors, which no config file lists) from one
+// headless run. Costs one tiny Haiku turn on the subscription.
+function claudeLive() {
+  const r = spawnSync('claude', ['-p', 'Reply with: ok', '--model', 'haiku', '--output-format', 'stream-json', '--verbose'], {
+    encoding: 'utf8',
+    timeout: 180_000,
+    cwd: process.cwd(),
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  for (const line of (r.stdout || '').split('\n')) {
+    const d = parseJson(line);
+    if (d?.type === 'system' && d.subtype === 'init') {
+      const counts = {};
+      for (const t of d.tools ?? []) {
+        const m = /^mcp__(.+?)__/.exec(t);
+        if (m) counts[m[1]] = (counts[m[1]] || 0) + 1;
+      }
+      return { servers: d.mcp_servers ?? [], counts };
+    }
+  }
+  return undefined;
+}
+
+function cmdAudit() {
+  const json = flag('--json');
+  const live = flag('--live');
+  const avg = Number(flag('--avg-tokens-per-tool', true) || process.env.MCPX_AVG_TOKENS_PER_TOOL || 940);
+  const rows = [...claudeServers(), ...codexServers()];
+  if (live) {
+    const l = claudeLive();
+    if (!l) process.stderr.write('mcpx: --live run failed; showing config-file view only\n');
+    for (const s of l?.servers ?? []) {
+      const key = s.name.replace(/[^A-Za-z0-9_-]/g, '_');
+      let row = rows.find((r) => r.harness === 'claude' && r.name === s.name);
+      if (!row) {
+        row = { harness: 'claude', name: s.name, kind: s.name.startsWith('claude.ai ') ? 'claude.ai connector' : s.name.startsWith('plugin:') ? 'plugin' : 'other', where: s.name.startsWith('claude.ai ') ? 'claude.ai → Settings → Connectors' : '?' };
+        rows.push(row);
+      }
+      row.liveStatus = s.status;
+      row.liveTools = l.counts[key] ?? 0;
+    }
+  }
+  const known = new Set(serverNames());
+  for (const r of rows) {
+    const short = r.short || r.name;
+    const viaMcpx = known.has(short) ? loadServer(short) : undefined;
+    if (viaMcpx?.status === 'ok') {
+      r.mcpx = 'reachable';
+      r.tools = viaMcpx.tools.length;
+      r.tokens = defTokens(viaMcpx.tools);
+      r.exact = true;
+    } else {
+      r.mcpx = viaMcpx ? `not reachable (${viaMcpx.error || viaMcpx.status})` : r.kind === 'claude.ai connector' ? 'no (auth lives inside claude.ai)' : 'not configured in mcporter';
+      r.tools = r.liveTools ?? null;
+      r.tokens = r.tools != null ? r.tools * avg : null;
+      r.exact = false;
+    }
+    if (r.harness === 'codex' && r.enabled === false) r.action = 'already disabled';
+    else if (r.mcpx === 'reachable') r.action = r.harness === 'codex' ? `move: set enabled = false under [mcp_servers.${r.name}]` : r.kind === 'plugin' ? 'move: disable in /mcp (keeps the plugin skills)' : `move: claude mcp remove ${r.name}`;
+    else if (r.liveStatus && r.liveStatus !== 'connected' && r.liveTools === 0) r.action = `not connected in this run (${r.liveStatus}), loads nothing — authorize it or disable it`;
+    else r.action = 'keep in harness (mcpx cannot authenticate to it)';
+  }
+  if (json) return console.log(JSON.stringify(rows));
+  console.log('harness\tserver\tkind\ttools\tdef tokens if loaded upfront\tmcpx\tproposal');
+  for (const r of rows) {
+    console.log([r.harness, r.name, r.kind, r.tools ?? '?', r.tokens == null ? '?' : `${r.exact ? '' : '~'}${r.tokens}`, r.mcpx, r.action].join('\t'));
+  }
+  console.log('\nNothing was changed. "~" = estimated from tool count × average; no "~" = computed from the real schemas.');
+  if (!live) console.log('Add --live for exact tool counts incl. claude.ai connectors (one small Haiku turn on the subscription).');
+}
+
+function help() {
+  console.log(`mcpx — call MCP tools from the shell; definitions stay out of context
+
+  mcpx servers [--refresh]                 servers mcporter can see, tool counts
+  mcpx search <query> [--server s]         tool names + one-line descriptions only
+  mcpx describe <server.tool> [--json]     schema of ONE tool (compact signature)
+  mcpx call <server.tool> '<json>'         call it; output capped at ${MAX_CHARS} chars
+        [--out file] [--full] [--max-chars N] [--yes] [--timeout ms]
+  mcpx audit [--live] [--json]             what each harness loads + move proposals
+
+Tool lists are cached ${TTL_MS / 3600_000}h in ${CACHE_DIR}. Auth: \`mcporter auth <server>\`
+(OAuth) or \${ENV} placeholders filled by \`op run\` — never paste secrets.`);
+}
+
+switch (cmd) {
+  case 'servers': cmdServers(); break;
+  case 'search': cmdSearch(); break;
+  case 'describe': cmdDescribe(); break;
+  case 'call': cmdCall(); break;
+  case 'audit': cmdAudit(); break;
+  default: help(); process.exit(cmd && cmd !== 'help' && cmd !== '--help' && cmd !== '-h' ? 2 : 0);
+}
