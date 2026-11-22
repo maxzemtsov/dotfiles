@@ -85,6 +85,12 @@ mcporter --config ~/.mcporter/mcporter.json config add <name> --url https://host
 }
 ```
 
+Gotcha: `mcporter config add --stdio <cmd> --stdio-arg …` silently drops the args
+(seen with 0.17.1, at least when an arg starts with `--`). For stdio servers, edit `~/.mcporter/mcporter.json`
+directly: `{"command": "uvx", "args": ["pkg==1.0", "--flag"]}`, then `mcpx servers --refresh`.
+When you move a server out of a harness, add it here first — a disabled harness entry
+may stop being imported.
+
 Only `call` (and a cache refresh) touches 1Password — one read per call. `search` and
 `describe` run from a 24-hour local cache (`~/.cache/mcpx`, `--refresh` to rebuild).
 
